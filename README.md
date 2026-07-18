@@ -1,7 +1,14 @@
-# SNT CMT — Sistema de Stock & Produção v3.3
+# SNT CMT — Sistema de Stock & Produção v3.3.1
 
 Sistema de gestão de stock de tecidos, encomendas garment e consumos para a SNT.
 Dados reais carregados: CW29 2026.
+
+## Correções v3.3.1 (IMPORTANTE — deploy obrigatório)
+
+| Problema | Causa | Correção |
+|---|---|---|
+| App crashava e voltava sempre à Dashboard ao usar campos selecionáveis | Segmentation fault do PyArrow (Python 3.13 + PyArrow recente incompatível com Streamlit 1.40) | Versões fixadas no `requirements.txt`: `numpy==2.1.3` + `pyarrow==18.1.0` — **tens de fazer push do requirements.txt também** |
+| Token ocupava demasiado destaque | Estrutura das tabelas | Token passa a ser a **última coluna** de todas as tabelas; **Fornecedor Tecido + Ref Tecido + Cor Tecido** sempre nas primeiras colunas |
 
 ## Novidades v3.3
 
@@ -28,14 +35,14 @@ O volume `qc_snt-volume` já está ligado com mount path `/app/data` — nada a 
 # 1. Substituir os ficheiros na pasta local do projeto
 # 2. Commit + push
 git add .
-git commit -m "v3.3 - Modo live, movimentacao 3 modos, dados corrigidos"
+git commit -m "v3.3.1 - Fix segfault PyArrow (requirements) + token na ultima coluna"
 git push origin main
 # 3. Railway faz deploy automático (1-2 min)
 ```
 
 **URL**: https://qcsnt-production.up.railway.app/
 
-⚠️ **Nota**: a v3.3 cria automaticamente uma base de dados nova (`snt_cmt_v33.db`) com os dados corrigidos — **não precisas de apagar nada** no Railway. O ficheiro antigo fica guardado no volume como backup, mas já não é usado.
+⚠️ **Nota**: a v3.3.1 cria automaticamente uma base de dados nova (`snt_cmt_v33.db`) com os dados corrigidos — **não precisas de apagar nada** no Railway. Se já tinhas feito deploy da v3.3, a base mantém-se e os dados são os mesmos.
 
 ## Cálculo de Stock
 

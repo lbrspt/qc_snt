@@ -731,6 +731,7 @@ def get_stock_position():
     query = """
     SELECT
         fr.ref_code,
+        fr.supplier,
         fr.description,
         fr.reorder_point,
         COALESCE(SUM(CASE WHEN fr2.status = 'AVAILABLE' THEN fr2.metres ELSE 0 END), 0) as disponivel,
@@ -739,7 +740,7 @@ def get_stock_position():
         COALESCE(SUM(CASE WHEN fr2.status IN ('AVAILABLE', 'RESERVED', 'IN_PROCESS') THEN fr2.metres ELSE 0 END), 0) as total_stock
     FROM fabric_refs fr
     LEFT JOIN fabric_rolls fr2 ON fr.ref_code = fr2.ref_code
-    GROUP BY fr.ref_code, fr.description, fr.reorder_point
+    GROUP BY fr.ref_code, fr.supplier, fr.description, fr.reorder_point
     """
     stock_df = query_to_df(query)
 
@@ -778,7 +779,9 @@ def export_stock_summary():
     return to_excel(get_stock_position(), 'Stock Resumido')
 
 def export_stock_detailed():
-    df = query_to_df("SELECT * FROM fabric_rolls ORDER BY ref_code, token")
+    df = query_to_df("""SELECT fr.supplier, r.ref_code, r.color, r.metres, r.lot, r.warehouse, r.status, r.po_garment, r.date_received, r.date_last_move, r.notes, r.token
+                        FROM fabric_rolls r LEFT JOIN fabric_refs fr ON r.ref_code = fr.ref_code
+                        ORDER BY r.ref_code, r.token""")
     return to_excel(df, 'Stock Detalhado')
 
 def safe_display_df(df):
@@ -807,7 +810,7 @@ def render_dashboard():
         <div style="display:flex;justify-content:space-between;align-items:center;">
             <div>
                 <h1>🏭 SNT CMT</h1>
-                <p>Sistema de Stock & Produção v3.3 | CW29 2026</p>
+                <p>Sistema de Stock & Produção v3.3.1 | CW29 2026</p>
             </div>
             <div class="live-badge"><span class="live-dot"></span> LIVE</div>
         </div>
@@ -868,9 +871,9 @@ def render_dashboard():
         st.markdown('<div class="section-title">Posição de Stock por Referência de Tecido</div>', unsafe_allow_html=True)
         st.markdown('<div class="section-subtitle">stock líquido = disponível + em processo | planeamento = líquido + a chegar − necessidade</div>', unsafe_allow_html=True)
 
-        display_df = stock_df[['ref_code', 'description', 'disponivel', 'em_processo', 'stock_liquido', 'a_chegar', 'necessidade', 'planeamento', 'status']].copy()
+        display_df = stock_df[['supplier', 'ref_code', 'description', 'disponivel', 'em_processo', 'stock_liquido', 'a_chegar', 'necessidade', 'planeamento', 'status']].copy()
         display_df = safe_display_df(display_df)
-        display_df.columns = ['Ref', 'Descrição', 'Disponível', 'Em Processo', 'Stock Líquido', 'A Chegar', 'Necessidade', 'Planeamento', 'Status']
+        display_df.columns = ['Fornecedor', 'Ref', 'Descrição', 'Disponível', 'Em Processo', 'Stock Líquido', 'A Chegar', 'Necessidade', 'Planeamento', 'Status']
         st.dataframe(display_df, use_container_width=True, hide_index=True, height=400)
 
         # Pipeline
@@ -935,19 +938,20 @@ def render_stock():
         with col3:
             selected_status = st.selectbox("Status", ['Todos'] + ROLL_STATUSES, key="stock_status")
 
-        query = "SELECT token, ref_code, metres, color, lot, warehouse, status, po_garment, notes FROM fabric_rolls WHERE 1=1"
+        query = """SELECT fr.supplier, r.ref_code, r.color, r.metres, r.lot, r.warehouse, r.status, r.po_garment, r.notes, r.token
+                   FROM fabric_rolls r LEFT JOIN fabric_refs fr ON r.ref_code = fr.ref_code WHERE 1=1"""
         params = []
         if selected_wh != 'Todos':
-            query += " AND warehouse = ?"; params.append(selected_wh)
+            query += " AND r.warehouse = ?"; params.append(selected_wh)
         if selected_ref != 'Todas':
-            query += " AND ref_code = ?"; params.append(selected_ref)
+            query += " AND r.ref_code = ?"; params.append(selected_ref)
         if selected_status != 'Todos':
-            query += " AND status = ?"; params.append(selected_status)
-        query += " ORDER BY ref_code, token LIMIT 500"
+            query += " AND r.status = ?"; params.append(selected_status)
+        query += " ORDER BY r.ref_code, r.token LIMIT 500"
 
         rolls_df = query_to_df(query, params)
         clean_df = safe_display_df(rolls_df)
-        clean_df.columns = ['Token', 'Ref', 'Metros', 'Cor', 'Lote', 'Armazém', 'Status', 'PO Garment', 'Notas']
+        clean_df.columns = ['Fornecedor', 'Ref', 'Cor', 'Metros', 'Lote', 'Armazém', 'Status', 'PO Garment', 'Notas', 'Token']
         st.dataframe(clean_df, use_container_width=True, hide_index=True, height=500)
 
         st.markdown('<div class="section-title">Exportar seleção atual</div>', unsafe_allow_html=True)
@@ -963,14 +967,14 @@ def render_incoming():
     st.markdown('<div class="section-subtitle">Encomendas de tecido pendentes — só contam para planeamento, não entram no stock líquido</div>', unsafe_allow_html=True)
 
     incoming_df = query_to_df("""
-        SELECT i.po_number, i.supplier, i.ref_code, i.total_metres, i.expected_date, i.status, i.tracking_ref, fr.description
+        SELECT i.supplier, i.ref_code, fr.description, i.total_metres, i.expected_date, i.status, i.tracking_ref, i.po_number
         FROM incoming_fabric i LEFT JOIN fabric_refs fr ON i.ref_code = fr.ref_code
         WHERE i.status IN ('EXPECTED', 'IN_TRANSIT') ORDER BY i.expected_date
     """)
 
     if not incoming_df.empty:
         clean = safe_display_df(incoming_df)
-        clean.columns = ['PO', 'Fornecedor', 'Ref', 'Metros', 'Data Prevista', 'Status', 'Tracking', 'Descrição']
+        clean.columns = ['Fornecedor', 'Ref', 'Descrição', 'Metros', 'Data Prevista', 'Status', 'Tracking', 'PO']
         st.dataframe(clean, use_container_width=True, hide_index=True, height=400)
 
         # Marcar como recebido → vai para Receção no menu Movimentar
@@ -1124,14 +1128,15 @@ def render_production():
     # ---------- TAB LISTA ----------
     with tab_list:
         status_filter = st.selectbox("Estado", ['Todas'] + PROD_STATUSES, key="prod_filter")
-        q = "SELECT po_number, model_name, confeccionador, po_qty, fabric_ref, metres_expected, expected_date, status FROM production"
+        q = """SELECT fr.supplier as fornecedor, p.fabric_ref, p.model_name, p.confeccionador, p.po_qty, p.metres_expected, p.expected_date, p.status, p.po_number
+               FROM production p LEFT JOIN fabric_refs fr ON p.fabric_ref = fr.ref_code"""
         if status_filter != 'Todas':
-            q += f" WHERE status = '{status_filter}'"
-        q += " ORDER BY expected_date"
+            q += f" WHERE p.status = '{status_filter}'"
+        q += " ORDER BY p.expected_date"
         prod_df = query_to_df(q)
         if not prod_df.empty:
             clean = safe_display_df(prod_df)
-            clean.columns = ['PO', 'Modelo', 'Confeccionador', 'Qty', 'Ref', 'Metros', 'Entrega', 'Status']
+            clean.columns = ['Fornecedor Tecido', 'Ref Tecido', 'Modelo', 'Confeccionador', 'Qty', 'Metros', 'Entrega', 'Status', 'PO']
             st.dataframe(clean, use_container_width=True, hide_index=True, height=450)
             total_m = prod_df['metres_expected'].fillna(0).sum()
             st.markdown(f'<div class="section-subtitle">{len(prod_df)} POs | {total_m:,.0f}m esperados</div>', unsafe_allow_html=True)
@@ -1272,8 +1277,9 @@ def render_movement():
             sel_tokens = st.multiselect(
                 "Rolos a mover",
                 rolls_avail['token'].tolist(),
-                format_func=lambda t: f"{t} — {rolls_avail[rolls_avail['token']==t].iloc[0]['metres']:.1f}m" +
-                                      (f" ({rolls_avail[rolls_avail['token']==t].iloc[0]['color']})" if rolls_avail[rolls_avail['token']==t].iloc[0]['color'] else ""),
+                format_func=lambda t: f"{rolls_avail[rolls_avail['token']==t].iloc[0]['metres']:.1f}m" +
+                                      (f" · {rolls_avail[rolls_avail['token']==t].iloc[0]['color']}" if rolls_avail[rolls_avail['token']==t].iloc[0]['color'] else "") +
+                                      f" — {t}",
                 key="m1_tokens")
             total_sel = rolls_avail[rolls_avail['token'].isin(sel_tokens)]['metres'].sum()
             st.markdown(f'<div class="section-subtitle">{len(sel_tokens)} rolos selecionados — total {total_sel:,.1f}m</div>', unsafe_allow_html=True)
@@ -1475,10 +1481,10 @@ def render_movement():
 
     # Histórico
     st.markdown('<div class="section-title">Histórico de Movimentações — Últimas 20</div>', unsafe_allow_html=True)
-    hist_df = query_to_df("SELECT * FROM movements ORDER BY date_time DESC LIMIT 20")
+    hist_df = query_to_df("SELECT date_time, move_type, from_location, to_location, ref_code, metres, po_garment, notes, token FROM movements ORDER BY date_time DESC LIMIT 20")
     if not hist_df.empty:
         clean = safe_display_df(hist_df)
-        clean.columns = ['ID', 'Data/Hora', 'Tipo', 'Token', 'De', 'Para', 'Ref', 'Metros', 'PO', 'Notas']
+        clean.columns = ['Data/Hora', 'Tipo', 'De', 'Para', 'Ref', 'Metros', 'PO', 'Notas', 'Token']
         st.dataframe(clean, use_container_width=True, hide_index=True)
     else:
         st.info("Sem movimentações registadas.")
@@ -1517,10 +1523,12 @@ def render_trace():
             </div>
             """, unsafe_allow_html=True)
 
-            hist_df = query_to_df("SELECT * FROM movements WHERE token = ? OR po_garment = ? ORDER BY date_time DESC", (search, search))
+            hist_df = query_to_df("SELECT date_time, move_type, from_location, to_location, ref_code, metres, po_garment, notes, token FROM movements WHERE token = ? OR po_garment = ? ORDER BY date_time DESC", (search, search))
             if not hist_df.empty:
                 st.markdown('<div class="section-title">Histórico de Movimentações</div>', unsafe_allow_html=True)
-                st.dataframe(safe_display_df(hist_df), use_container_width=True, hide_index=True, height=250)
+                clean = safe_display_df(hist_df)
+                clean.columns = ['Data/Hora', 'Tipo', 'De', 'Para', 'Ref', 'Metros', 'PO', 'Notas', 'Token']
+                st.dataframe(clean, use_container_width=True, hide_index=True, height=250)
         else:
             po_df = query_to_df("SELECT * FROM production WHERE po_number = ?", (search,))
             if not po_df.empty:
@@ -1532,15 +1540,21 @@ def render_trace():
                     st.markdown('<div class="section-title">Consumos Registados</div>', unsafe_allow_html=True)
                     st.dataframe(safe_display_df(cons_df), use_container_width=True, hide_index=True)
 
-                roll_df = query_to_df("SELECT * FROM fabric_rolls WHERE po_garment = ?", (search,))
+                roll_df = query_to_df("""SELECT fr.supplier, r.ref_code, r.color, r.metres, r.warehouse, r.status, r.token
+                                         FROM fabric_rolls r LEFT JOIN fabric_refs fr ON r.ref_code = fr.ref_code
+                                         WHERE r.po_garment = ?""", (search,))
                 if not roll_df.empty:
                     st.markdown('<div class="section-title">Rolos/Lotes Alocados</div>', unsafe_allow_html=True)
-                    st.dataframe(safe_display_df(roll_df), use_container_width=True, hide_index=True)
+                    clean = safe_display_df(roll_df)
+                    clean.columns = ['Fornecedor', 'Ref', 'Cor', 'Metros', 'Local', 'Status', 'Token']
+                    st.dataframe(clean, use_container_width=True, hide_index=True)
 
-                mov_df = query_to_df("SELECT * FROM movements WHERE po_garment = ? ORDER BY date_time DESC", (search,))
+                mov_df = query_to_df("SELECT date_time, move_type, from_location, to_location, ref_code, metres, notes, token FROM movements WHERE po_garment = ? ORDER BY date_time DESC", (search,))
                 if not mov_df.empty:
                     st.markdown('<div class="section-title">Movimentações</div>', unsafe_allow_html=True)
-                    st.dataframe(safe_display_df(mov_df), use_container_width=True, hide_index=True)
+                    clean = safe_display_df(mov_df)
+                    clean.columns = ['Data/Hora', 'Tipo', 'De', 'Para', 'Ref', 'Metros', 'Notas', 'Token']
+                    st.dataframe(clean, use_container_width=True, hide_index=True)
             else:
                 st.warning("Nenhum resultado encontrado. Tenta outro token, PO ou referência.")
 
@@ -1571,7 +1585,9 @@ def render_export():
             <div class="info-card-text">todos os rolos e lotes com tokens</div>
         </div>
         """, unsafe_allow_html=True)
-        df2 = query_to_df("SELECT token, ref_code, metres, color, lot, warehouse, status, po_garment, date_last_move, notes FROM fabric_rolls WHERE status != 'INVOICED' ORDER BY ref_code, token")
+        df2 = query_to_df("""SELECT fr.supplier, r.ref_code, r.color, r.metres, r.lot, r.warehouse, r.status, r.po_garment, r.date_last_move, r.notes, r.token
+                             FROM fabric_rolls r LEFT JOIN fabric_refs fr ON r.ref_code = fr.ref_code
+                             WHERE r.status != 'INVOICED' ORDER BY r.ref_code, r.token""")
         download_pair(df2, f"stock_detalhado_{datetime.now().strftime('%Y%m%d')}", 'Stock Detalhado', 'exp_det')
 
     with col3:
@@ -1619,7 +1635,7 @@ def main():
     st.sidebar.markdown(f"""
     <div style="position:fixed;bottom:20px;left:20px;right:20px;">
         <div style="border-top:1px solid rgba(255,255,255,0.06);padding-top:12px;color:#64748b;font-size:11px;text-align:center;">
-            v3.3 | Dados: CW29 2026<br>{datetime.now().strftime('%Y-%m-%d')}<br>
+            v3.3.1 | Dados: CW29 2026<br>{datetime.now().strftime('%Y-%m-%d')}<br>
             <span style="color:#3b82f6;font-weight:600;">SNT CMT</span>
         </div>
     </div>
