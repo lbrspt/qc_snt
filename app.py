@@ -1,7 +1,12 @@
 """
-SNT CMT - Sistema de Stock & Produção v3.2
-Real production data from CW29 2026
-Features: Pro design, live editing, consumption validation, warehouse/roll movement
+SNT CMT - Sistema de Stock & Produção v3.3
+Dados reais CW29 2026
+Novidades v3.3:
+- Modo LIVE na Produção: lançar consumo de corte em tempo real com validação de desvios
+- Movimentação em 3 modos: rolos conhecidos, lote agregado (divisível), metros consolidados
+- Edição live: mapa de consumos e pontos de reposição editáveis na grelha
+- Exportação Excel + CSV
+- Dados corrigidos: linhas TOTAL removidas, refs em processo normalizadas (ref + cor)
 """
 
 import streamlit as st
@@ -70,8 +75,8 @@ st.markdown("""
     .kpi-delta.info { color: #3b82f6; }
 
     /* Section titles */
-    .section-title { 
-        color: #e0e6ed; font-size: 16px; font-weight: 600; 
+    .section-title {
+        color: #e0e6ed; font-size: 16px; font-weight: 600;
         margin: 24px 0 12px 0; padding-bottom: 8px;
         border-bottom: 1px solid rgba(255,255,255,0.06);
     }
@@ -176,7 +181,7 @@ st.markdown("""
         border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 20px;
         margin-bottom: 16px;
     }
-    .trace-token { 
+    .trace-token {
         display: inline-block; background: rgba(37,99,235,0.15); color: #60a5fa;
         padding: 4px 12px; border-radius: 8px; font-size: 13px; font-weight: 600;
         font-family: 'SF Mono', monospace; border: 1px solid rgba(37,99,235,0.2);
@@ -185,29 +190,21 @@ st.markdown("""
     .trace-detail-label { color: #64748b; font-size: 11px; text-transform: uppercase; }
     .trace-detail-value { color: #e0e6ed; font-size: 14px; font-weight: 600; margin-top: 4px; }
 
-    /* Movement form */
-    .movement-form { 
-        display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
-        background: rgba(30,58,95,0.2); padding: 20px; border-radius: 12px;
-        border: 1px solid rgba(255,255,255,0.06); margin-bottom: 20px;
-    }
-    .form-group label { color: #8b9dc3; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; display: block; }
+    /* Live deviation indicator */
+    .dev-box { border-radius: 12px; padding: 16px; text-align: center; margin: 12px 0; }
+    .dev-box.ok { background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.3); }
+    .dev-box.warn { background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.3); }
+    .dev-box.bad { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); }
+    .dev-value { font-size: 28px; font-weight: 700; }
+    .dev-label { font-size: 11px; color: #8b9dc3; text-transform: uppercase; letter-spacing: 0.5px; }
 
     /* Tabs */
     .stTabs [data-baseweb="tab-list"] { background: rgba(30,58,95,0.3) !important; border-radius: 12px !important; padding: 4px !important; gap: 4px !important; }
     .stTabs [data-baseweb="tab"] { color: #8b9dc3 !important; font-size: 13px !important; border-radius: 8px !important; padding: 8px 16px !important; }
     .stTabs [data-baseweb="tab"][aria-selected="true"] { background: rgba(37,99,235,0.2) !important; color: #60a5fa !important; font-weight: 600 !important; }
 
-    /* Search */
-    .search-box { 
-        width: 100%; padding: 12px 16px; border-radius: 12px;
-        background: rgba(30,58,95,0.4); border: 1px solid rgba(255,255,255,0.1);
-        color: #e0e6ed; font-size: 14px; margin-bottom: 20px;
-    }
-    .search-box:focus { outline: none; border-color: #2563eb; }
-
     /* Badges */
-    .badge { 
+    .badge {
         display: inline-flex; align-items: center; padding: 3px 10px;
         border-radius: 6px; font-size: 11px; font-weight: 600;
     }
@@ -232,9 +229,9 @@ st.markdown("""
 # ===================== DB SETUP =====================
 DATA_DIR = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH", "data")
 os.makedirs(DATA_DIR, exist_ok=True)
-DB_PATH = os.path.join(DATA_DIR, "snt_cmt.db")
+DB_PATH = os.path.join(DATA_DIR, "snt_cmt_v33.db")
 
-# ===================== DB CONNECTION (no cache) =====================
+# ===================== DB CONNECTION (sem cache) =====================
 def get_db_connection():
     return sqlite3.connect(DB_PATH, check_same_thread=False)
 
@@ -258,8 +255,34 @@ def execute_many(query, params_list):
     conn.commit()
     conn.close()
 
+def log_movement(move_type, token, from_loc, to_loc, ref_code, metres, po_garment=None, notes=None):
+    execute_sql(
+        "INSERT INTO movements (date_time, move_type, token, from_location, to_location, ref_code, metres, po_garment, notes) VALUES (?,?,?,?,?,?,?,?,?)",
+        (datetime.now().isoformat(), move_type, token, from_loc, to_loc, ref_code, metres, po_garment, notes))
 
-# ===================== SEED DATA =====================
+def next_token(prefix, ref_code):
+    """Gera próximo token sequencial para um prefixo+ref."""
+    safe_ref = ref_code.replace('/', '_').replace(' ', '_')
+    like = f"{prefix}-{safe_ref}-%"
+    df = query_to_df("SELECT token FROM fabric_rolls WHERE token LIKE ?", (like,))
+    n = len(df) + 1
+    while True:
+        token = f"{prefix}-{safe_ref}-{n:03d}"
+        chk = query_to_df("SELECT COUNT(*) as c FROM fabric_rolls WHERE token = ?", (token,))
+        if chk.iloc[0]['c'] == 0:
+            return token
+        n += 1
+
+# ===================== CONSTANTES =====================
+WAREHOUSES = ['XBS', 'Riopele']
+CONFECCIONADORES = ['Samidel', 'Costa Correia', 'Tyrrell', 'Acorfato', 'Fabrijeans',
+                    'Fabrijeans / Costa C', 'António & Carla', 'Denimworks', 'Vermis']
+ALL_LOCATIONS = WAREHOUSES + CONFECCIONADORES + ['Fornecedor', 'Cliente']
+PROD_STATUSES = ['PENDING', 'CUTTING', 'SEWING', 'INVOICED']
+ROLL_STATUSES = ['AVAILABLE', 'RESERVED', 'IN_PROCESS', 'INVOICED']
+
+
+# ===================== SEED DATA (CW29 2026, corrigido v3.3) =====================
 FABRIC_REFS = [
     ('TCB258/EC1', 'Essential Exclusive', 'Riopele', 1000),
     ('TCD648/F1', 'Freely Exclusive', 'Riopele', 1000),
@@ -273,7 +296,9 @@ FABRIC_REFS = [
     ('TCC130/RY1', 'Harrys Brown Herringbone', 'Riopele', 300),
     ('TCC132/RY1', 'Harrys Black', 'Riopele', 300),
     ('TCE278/F1', 'Freely Fancy Signature', 'Riopele', 500),
+    ('TCD340/RY1', 'Serene Wool', 'Riopele', 300),
     ('TCD341/F1', 'Harrys Dark Navy Pinstripe', 'Riopele', 300),
+    ('TCD342/RY1', 'Heritage Wool', 'Riopele', 300),
     ('TC9973', 'Merci Recycled', 'Riopele', 300),
     ('TCD573/EC1', 'Essential Twill', 'Riopele', 500),
     ('TCC482/RY1', 'Bird Tech Linen', 'Riopele', 300),
@@ -341,7 +366,7 @@ PRODUCTION = [
     ('POAPS2000004377', 'Women Ease Pants Wide Vanilla Melange (Use all fabric)', 'Costa Correia', 86, 'GB14W', 120.40, '2026-07-31', 'PENDING'),
     ('POAPS2000004376', 'Women Ease Pants Straight Vanilla Melange (Use all fabric)', 'Costa Correia', 61, 'GB14W', 85.40, '2026-07-31', 'PENDING'),
     ('POAPS2000004299', 'Women Serene Blazer Walnut Herringbone (Use all fabric)', 'Tyrrell', 168, 'TCD340/RY1', 235.20, '2026-07-31', 'PENDING'),
-    ('POAPS2000004273', 'Timeless Wool Blazer Dark Brown Check', 'Tyrrell', 209, 'UNKNOWN', 292.60, '2026-07-31', 'PENDING'),
+    ('POAPS2000004273', 'Timeless Wool Blazer Dark Brown Check', 'Tyrrell', 209, None, 292.60, '2026-07-31', 'PENDING'),
     ('POAPS2000004253', 'Motion Suit Pants Cognac', 'Samidel', 1001, '43793', 1401.40, '2026-07-31', 'PENDING'),
     ('POAPS2000004252', 'Motion Suit Pants Pepper Grey', 'Samidel', 600, '43793', 840.00, '2026-07-31', 'PENDING'),
     ('POAPS2000004251', 'Motion Suit Pants Midnight Blue', 'Samidel', 1074, '43793', 1503.60, '2026-07-31', 'PENDING'),
@@ -388,7 +413,6 @@ CONSUMPTION_MAP = [
     ('Heavy Edition Pants Men Plain', 'TC9973', 1.37),
     ('Heritage Pants Relaxed Fit Men Plain', 'TCD342/RY1', 1.49),
     ('Linen Wide Fit Pants Men Plain', 'TCD573/EC1', 1.47),
-    ('Linen Wide Fit Pants Men Plain', 'TCD573/EC1', 1.47),
     ('Siena Jacket Men Plain', 'Carreman-Garco', 2.05),
     ('Siena Pants Men Plain', 'Carreman-Garco', 1.31),
     ('Siena Shirt Men Plain', 'Carreman-Garco', 1.4),
@@ -407,173 +431,168 @@ CONSUMPTION_MAP = [
     ('Tech Wool Suit Pants Relaxed Fit Men Plain', '43793', 1.31),
 ]
 
+# Rolos XBS — v3.3: linhas TOTAL / TOTAL GERAL do Excel removidas (eram subtotais, duplicavam stock)
 FABRIC_ROLLS = [
-    ('R-TCB258_EC1-001', 'TCB258/EC1', 28.71, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-002', 'TCB258/EC1', 26.11, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-003', 'TCB258/EC1', 54.82, 'TOTAL ', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-004', 'TCB258/EC1', 33.18, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-005', 'TCB258/EC1', 33.18, 'TOTAL ', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-006', 'TCB258/EC1', 52.33, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-007', 'TCB258/EC1', 54.71, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-008', 'TCB258/EC1', 46.46, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-009', 'TCB258/EC1', 47.06, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-010', 'TCB258/EC1', 47.08, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-011', 'TCB258/EC1', 51.79, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-012', 'TCB258/EC1', 52.80, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-013', 'TCB258/EC1', 52.25, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-014', 'TCB258/EC1', 52.82, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-015', 'TCB258/EC1', 41.01, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-016', 'TCB258/EC1', 59.78, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-017', 'TCB258/EC1', 64.93, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-018', 'TCB258/EC1', 42.90, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-019', 'TCB258/EC1', 42.69, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-020', 'TCB258/EC1', 54.14, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-021', 'TCB258/EC1', 51.11, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-022', 'TCB258/EC1', 62.18, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-023', 'TCB258/EC1', 33.66, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-024', 'TCB258/EC1', 42.92, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-025', 'TCB258/EC1', 54.38, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-026', 'TCB258/EC1', 54.72, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-027', 'TCB258/EC1', 54.81, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-028', 'TCB258/EC1', 52.63, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-029', 'TCB258/EC1', 45.85, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-030', 'TCB258/EC1', 48.72, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-031', 'TCB258/EC1', 46.38, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-032', 'TCB258/EC1', 54.03, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-033', 'TCB258/EC1', 54.04, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-034', 'TCB258/EC1', 54.34, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-035', 'TCB258/EC1', 54.47, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-036', 'TCB258/EC1', 1526.99, 'TOTAL ', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-037', 'TCB258/EC1', 1614.99, 'TOTAL GERAL', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-038', 'TCB258/EC1', 26.65, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-039', 'TCB258/EC1', 53.73, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-040', 'TCB258/EC1', 29.77, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-041', 'TCB258/EC1', 40.04, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-042', 'TCB258/EC1', 44.70, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-043', 'TCB258/EC1', 39.29, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-044', 'TCB258/EC1', 39.76, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-045', 'TCB258/EC1', 51.07, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-046', 'TCB258/EC1', 42.69, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-047', 'TCB258/EC1', 50.22, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-048', 'TCB258/EC1', 51.90, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-049', 'TCB258/EC1', 52.68, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-050', 'TCB258/EC1', 42.31, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-051', 'TCB258/EC1', 42.23, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-052', 'TCB258/EC1', 35.72, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-053', 'TCB258/EC1', 19.26, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-054', 'TCB258/EC1', 662.02, 'TOTAL ', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-055', 'TCB258/EC1', 49.58, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-056', 'TCB258/EC1', 51.62, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-057', 'TCB258/EC1', 52.05, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-058', 'TCB258/EC1', 15.96, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-059', 'TCB258/EC1', 45.25, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-060', 'TCB258/EC1', 45.61, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-061', 'TCB258/EC1', 50.00, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-062', 'TCB258/EC1', 49.90, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-063', 'TCB258/EC1', 40.97, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-064', 'TCB258/EC1', 41.08, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-065', 'TCB258/EC1', 46.84, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-066', 'TCB258/EC1', 46.56, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-067', 'TCB258/EC1', 50.26, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-068', 'TCB258/EC1', 50.90, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-069', 'TCB258/EC1', 22.60, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-070', 'TCB258/EC1', 60.11, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-071', 'TCB258/EC1', 24.48, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-072', 'TCB258/EC1', 38.11, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-073', 'TCB258/EC1', 63.34, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-074', 'TCB258/EC1', 51.77, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-075', 'TCB258/EC1', 48.00, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-076', 'TCB258/EC1', 48.56, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-077', 'TCB258/EC1', 46.52, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-078', 'TCB258/EC1', 46.45, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-079', 'TCB258/EC1', 1086.52, 'TOTAL ', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-080', 'TCB258/EC1', 40.65, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-081', 'TCB258/EC1', 44.78, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-082', 'TCB258/EC1', 44.75, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-083', 'TCB258/EC1', 44.22, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-084', 'TCB258/EC1', 45.37, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-085', 'TCB258/EC1', 45.65, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-086', 'TCB258/EC1', 45.65, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-087', 'TCB258/EC1', 64.04, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-088', 'TCB258/EC1', 58.26, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-089', 'TCB258/EC1', 59.28, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-090', 'TCB258/EC1', 59.51, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-091', 'TCB258/EC1', 59.53, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-092', 'TCB258/EC1', 42.52, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-093', 'TCB258/EC1', 55.39, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-094', 'TCB258/EC1', 56.31, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-095', 'TCB258/EC1', 55.51, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-096', 'TCB258/EC1', 42.10, 'TCB258/EC1', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-097', 'TCB258/EC1', 863.52, 'TOTAL ', 'XBS', 'AVAILABLE', 'None'),
-    ('R-TCB258_EC1-098', 'TCB258/EC1', 2612.06, 'TOTAL GERAL', 'XBS', 'AVAILABLE', 'None'),
-    ('R-GZIC GR4-099', 'GZIC GR4', 100.60, '0327-SD-HY', 'XBS', 'AVAILABLE', 'None'),
-    ('R-GZIC GR4-100', 'GZIC GR4', 102.40, '0327-SD-HY', 'XBS', 'AVAILABLE', 'None'),
+    ('R-TCB258_EC1-001', 'TCB258/EC1', 28.71, None, 'XBS'),
+    ('R-TCB258_EC1-002', 'TCB258/EC1', 26.11, None, 'XBS'),
+    ('R-TCB258_EC1-004', 'TCB258/EC1', 33.18, None, 'XBS'),
+    ('R-TCB258_EC1-006', 'TCB258/EC1', 52.33, None, 'XBS'),
+    ('R-TCB258_EC1-007', 'TCB258/EC1', 54.71, None, 'XBS'),
+    ('R-TCB258_EC1-008', 'TCB258/EC1', 46.46, None, 'XBS'),
+    ('R-TCB258_EC1-009', 'TCB258/EC1', 47.06, None, 'XBS'),
+    ('R-TCB258_EC1-010', 'TCB258/EC1', 47.08, None, 'XBS'),
+    ('R-TCB258_EC1-011', 'TCB258/EC1', 51.79, None, 'XBS'),
+    ('R-TCB258_EC1-012', 'TCB258/EC1', 52.80, None, 'XBS'),
+    ('R-TCB258_EC1-013', 'TCB258/EC1', 52.25, None, 'XBS'),
+    ('R-TCB258_EC1-014', 'TCB258/EC1', 52.82, None, 'XBS'),
+    ('R-TCB258_EC1-015', 'TCB258/EC1', 41.01, None, 'XBS'),
+    ('R-TCB258_EC1-016', 'TCB258/EC1', 59.78, None, 'XBS'),
+    ('R-TCB258_EC1-017', 'TCB258/EC1', 64.93, None, 'XBS'),
+    ('R-TCB258_EC1-018', 'TCB258/EC1', 42.90, None, 'XBS'),
+    ('R-TCB258_EC1-019', 'TCB258/EC1', 42.69, None, 'XBS'),
+    ('R-TCB258_EC1-020', 'TCB258/EC1', 54.14, None, 'XBS'),
+    ('R-TCB258_EC1-021', 'TCB258/EC1', 51.11, None, 'XBS'),
+    ('R-TCB258_EC1-022', 'TCB258/EC1', 62.18, None, 'XBS'),
+    ('R-TCB258_EC1-023', 'TCB258/EC1', 33.66, None, 'XBS'),
+    ('R-TCB258_EC1-024', 'TCB258/EC1', 42.92, None, 'XBS'),
+    ('R-TCB258_EC1-025', 'TCB258/EC1', 54.38, None, 'XBS'),
+    ('R-TCB258_EC1-026', 'TCB258/EC1', 54.72, None, 'XBS'),
+    ('R-TCB258_EC1-027', 'TCB258/EC1', 54.81, None, 'XBS'),
+    ('R-TCB258_EC1-028', 'TCB258/EC1', 52.63, None, 'XBS'),
+    ('R-TCB258_EC1-029', 'TCB258/EC1', 45.85, None, 'XBS'),
+    ('R-TCB258_EC1-030', 'TCB258/EC1', 48.72, None, 'XBS'),
+    ('R-TCB258_EC1-031', 'TCB258/EC1', 46.38, None, 'XBS'),
+    ('R-TCB258_EC1-032', 'TCB258/EC1', 54.03, None, 'XBS'),
+    ('R-TCB258_EC1-033', 'TCB258/EC1', 54.04, None, 'XBS'),
+    ('R-TCB258_EC1-034', 'TCB258/EC1', 54.34, None, 'XBS'),
+    ('R-TCB258_EC1-035', 'TCB258/EC1', 54.47, None, 'XBS'),
+    ('R-TCB258_EC1-038', 'TCB258/EC1', 26.65, None, 'XBS'),
+    ('R-TCB258_EC1-039', 'TCB258/EC1', 53.73, None, 'XBS'),
+    ('R-TCB258_EC1-040', 'TCB258/EC1', 29.77, None, 'XBS'),
+    ('R-TCB258_EC1-041', 'TCB258/EC1', 40.04, None, 'XBS'),
+    ('R-TCB258_EC1-042', 'TCB258/EC1', 44.70, None, 'XBS'),
+    ('R-TCB258_EC1-043', 'TCB258/EC1', 39.29, None, 'XBS'),
+    ('R-TCB258_EC1-044', 'TCB258/EC1', 39.76, None, 'XBS'),
+    ('R-TCB258_EC1-045', 'TCB258/EC1', 51.07, None, 'XBS'),
+    ('R-TCB258_EC1-046', 'TCB258/EC1', 42.69, None, 'XBS'),
+    ('R-TCB258_EC1-047', 'TCB258/EC1', 50.22, None, 'XBS'),
+    ('R-TCB258_EC1-048', 'TCB258/EC1', 51.90, None, 'XBS'),
+    ('R-TCB258_EC1-049', 'TCB258/EC1', 52.68, None, 'XBS'),
+    ('R-TCB258_EC1-050', 'TCB258/EC1', 42.31, None, 'XBS'),
+    ('R-TCB258_EC1-051', 'TCB258/EC1', 42.23, None, 'XBS'),
+    ('R-TCB258_EC1-052', 'TCB258/EC1', 35.72, None, 'XBS'),
+    ('R-TCB258_EC1-053', 'TCB258/EC1', 19.26, None, 'XBS'),
+    ('R-TCB258_EC1-055', 'TCB258/EC1', 49.58, None, 'XBS'),
+    ('R-TCB258_EC1-056', 'TCB258/EC1', 51.62, None, 'XBS'),
+    ('R-TCB258_EC1-057', 'TCB258/EC1', 52.05, None, 'XBS'),
+    ('R-TCB258_EC1-058', 'TCB258/EC1', 15.96, None, 'XBS'),
+    ('R-TCB258_EC1-059', 'TCB258/EC1', 45.25, None, 'XBS'),
+    ('R-TCB258_EC1-060', 'TCB258/EC1', 45.61, None, 'XBS'),
+    ('R-TCB258_EC1-061', 'TCB258/EC1', 50.00, None, 'XBS'),
+    ('R-TCB258_EC1-062', 'TCB258/EC1', 49.90, None, 'XBS'),
+    ('R-TCB258_EC1-063', 'TCB258/EC1', 40.97, None, 'XBS'),
+    ('R-TCB258_EC1-064', 'TCB258/EC1', 41.08, None, 'XBS'),
+    ('R-TCB258_EC1-065', 'TCB258/EC1', 46.84, None, 'XBS'),
+    ('R-TCB258_EC1-066', 'TCB258/EC1', 46.56, None, 'XBS'),
+    ('R-TCB258_EC1-067', 'TCB258/EC1', 50.26, None, 'XBS'),
+    ('R-TCB258_EC1-068', 'TCB258/EC1', 50.90, None, 'XBS'),
+    ('R-TCB258_EC1-069', 'TCB258/EC1', 22.60, None, 'XBS'),
+    ('R-TCB258_EC1-070', 'TCB258/EC1', 60.11, None, 'XBS'),
+    ('R-TCB258_EC1-071', 'TCB258/EC1', 24.48, None, 'XBS'),
+    ('R-TCB258_EC1-072', 'TCB258/EC1', 38.11, None, 'XBS'),
+    ('R-TCB258_EC1-073', 'TCB258/EC1', 63.34, None, 'XBS'),
+    ('R-TCB258_EC1-074', 'TCB258/EC1', 51.77, None, 'XBS'),
+    ('R-TCB258_EC1-075', 'TCB258/EC1', 48.00, None, 'XBS'),
+    ('R-TCB258_EC1-076', 'TCB258/EC1', 48.56, None, 'XBS'),
+    ('R-TCB258_EC1-077', 'TCB258/EC1', 46.52, None, 'XBS'),
+    ('R-TCB258_EC1-078', 'TCB258/EC1', 46.45, None, 'XBS'),
+    ('R-TCB258_EC1-080', 'TCB258/EC1', 40.65, None, 'XBS'),
+    ('R-TCB258_EC1-081', 'TCB258/EC1', 44.78, None, 'XBS'),
+    ('R-TCB258_EC1-082', 'TCB258/EC1', 44.75, None, 'XBS'),
+    ('R-TCB258_EC1-083', 'TCB258/EC1', 44.22, None, 'XBS'),
+    ('R-TCB258_EC1-084', 'TCB258/EC1', 45.37, None, 'XBS'),
+    ('R-TCB258_EC1-085', 'TCB258/EC1', 45.65, None, 'XBS'),
+    ('R-TCB258_EC1-086', 'TCB258/EC1', 45.65, None, 'XBS'),
+    ('R-TCB258_EC1-087', 'TCB258/EC1', 64.04, None, 'XBS'),
+    ('R-TCB258_EC1-088', 'TCB258/EC1', 58.26, None, 'XBS'),
+    ('R-TCB258_EC1-089', 'TCB258/EC1', 59.28, None, 'XBS'),
+    ('R-TCB258_EC1-090', 'TCB258/EC1', 59.51, None, 'XBS'),
+    ('R-TCB258_EC1-091', 'TCB258/EC1', 59.53, None, 'XBS'),
+    ('R-TCB258_EC1-092', 'TCB258/EC1', 42.52, None, 'XBS'),
+    ('R-TCB258_EC1-093', 'TCB258/EC1', 55.39, None, 'XBS'),
+    ('R-TCB258_EC1-094', 'TCB258/EC1', 56.31, None, 'XBS'),
+    ('R-TCB258_EC1-095', 'TCB258/EC1', 55.51, None, 'XBS'),
+    ('R-TCB258_EC1-096', 'TCB258/EC1', 42.10, None, 'XBS'),
+    ('R-GZIC_GR4-099', 'GZIC GR4', 100.60, '0327-SD-HY', 'XBS'),
+    ('R-GZIC_GR4-100', 'GZIC GR4', 102.40, '0327-SD-HY', 'XBS'),
 ]
 
+# Stock em processo (confeccionadores) — v3.3: ref base + cor separada
+# (token, ref_code, metres, color, confeccionador)
 IN_PROCESS_STOCK = [
-    ('P-Fabrijeans___Costa_C-TCB258_EC1-001', 'TCB258/EC1', 827.00, 'Fabrijeans / Costa C', 'IN_PROCESS'),
-    ('P-Fabrijeans___Costa_C-TCB258_EC1-002', 'TCB258/EC1', 208.97, 'Fabrijeans / Costa C', 'IN_PROCESS'),
-    ('P-Fabrijeans___Costa_C-TCB258_EC1-003', 'TCB258/EC1', 229.79, 'Fabrijeans / Costa C', 'IN_PROCESS'),
-    ('P-Fabrijeans___Costa_C-TCD524_EC1-004', 'TCD524/EC1', 1245.00, 'Fabrijeans / Costa C', 'IN_PROCESS'),
-    ('P-Samidel-GB14W MH col W9U1-005', 'GB14W MH col W9U1', 1772.15, 'Samidel', 'IN_PROCESS'),
-    ('P-Samidel-GB14W MH col 01U5-006', 'GB14W MH col 01U5', 2015.10, 'Samidel', 'IN_PROCESS'),
-    ('P-Samidel-GB14W UNI col A0-007', 'GB14W UNI col A0', 1732.20, 'Samidel', 'IN_PROCESS'),
-    ('P-Fabrijeans___Costa_C-GB14W UNI col 10-008', 'GB14W UNI col 10', 673.00, 'Fabrijeans / Costa C', 'IN_PROCESS'),
-    ('P-Samidel-GB14W UNI col 10-009', 'GB14W UNI col 10', 2439.60, 'Samidel', 'IN_PROCESS'),
-    ('P-Fabrijeans___Costa_C-GB14W UNI col 73-010', 'GB14W UNI col 73', 30.00, 'Fabrijeans / Costa C', 'IN_PROCESS'),
-    ('P-Fabrijeans___Costa_C-GB14W UNI col 91-011', 'GB14W UNI col 91', 212.00, 'Fabrijeans / Costa C', 'IN_PROCESS'),
-    ('P-Fabrijeans___Costa_C-GB14W UNI col 93-012', 'GB14W UNI col 93', 1584.60, 'Fabrijeans / Costa C', 'IN_PROCESS'),
-    ('P-Fabrijeans___Costa_C-GB14W UNI col 1-013', 'GB14W UNI col 1', 1134.80, 'Fabrijeans / Costa C', 'IN_PROCESS'),
-    ('P-Samidel-GB14W UNI col 1-014', 'GB14W UNI col 1', 3922.00, 'Samidel', 'IN_PROCESS'),
-    ('P-Fabrijeans___Costa_C-GB14W UNI Evergreen A1-015', 'GB14W UNI Evergreen A1', 725.40, 'Fabrijeans / Costa C', 'IN_PROCESS'),
-    ('P-Samidel-Guana S32 Pepper Grey B5-016', 'Guana S32 Pepper Grey B5', 796.70, 'Samidel', 'IN_PROCESS'),
-    ('P-Samidel-Guana TW6 Midnight Blue 10-017', 'Guana TW6 Midnight Blue 10', 1465.90, 'Samidel', 'IN_PROCESS'),
-    ('P-Fabrijeans___Costa_C-Guana S32 Cool Brown C2-018', 'Guana S32 Cool Brown C2', 1387.10, 'Fabrijeans / Costa C', 'IN_PROCESS'),
-    ('P-Fabrijeans___Costa_C-Guana 089 Grey Flint B15-019', 'Guana 089 Grey Flint B15', 975.50, 'Fabrijeans / Costa C', 'IN_PROCESS'),
-    ('P-Samidel-TCD340_RY1-020', 'TCD340/RY1', 60.99, 'Samidel', 'IN_PROCESS'),
-    ('P-Fabrijeans___Costa_C-TCE278_F1-021', 'TCE278/F1', 5755.33, 'Fabrijeans / Costa C', 'IN_PROCESS'),
+    ('P-Fabrijeans_CostaC-TCB258_EC1-001', 'TCB258/EC1', 827.00, 'Dark Grey Melange', 'Fabrijeans / Costa C'),
+    ('P-Fabrijeans_CostaC-TCB258_EC1-002', 'TCB258/EC1', 208.97, 'Pine Green', 'Fabrijeans / Costa C'),
+    ('P-Fabrijeans_CostaC-TCB258_EC1-003', 'TCB258/EC1', 229.79, 'Dark Grey Melange', 'Fabrijeans / Costa C'),
+    ('P-Fabrijeans_CostaC-TCD524_EC1-001', 'TCD524/EC1', 1245.00, 'Almond', 'Fabrijeans / Costa C'),
+    ('P-Samidel-GB14W-001', 'GB14W', 1772.15, 'MH W9U1', 'Samidel'),
+    ('P-Samidel-GB14W-002', 'GB14W', 2015.10, 'MH 01U5', 'Samidel'),
+    ('P-Samidel-GB14W-003', 'GB14W', 1732.20, 'UNI A0', 'Samidel'),
+    ('P-Fabrijeans_CostaC-GB14W-001', 'GB14W', 673.00, 'UNI 10', 'Fabrijeans / Costa C'),
+    ('P-Samidel-GB14W-004', 'GB14W', 2439.60, 'UNI 10', 'Samidel'),
+    ('P-Fabrijeans_CostaC-GB14W-002', 'GB14W', 30.00, 'UNI 73', 'Fabrijeans / Costa C'),
+    ('P-Fabrijeans_CostaC-GB14W-003', 'GB14W', 212.00, 'UNI 91', 'Fabrijeans / Costa C'),
+    ('P-Fabrijeans_CostaC-GB14W-004', 'GB14W', 1584.60, 'UNI 93', 'Fabrijeans / Costa C'),
+    ('P-Fabrijeans_CostaC-GB14W-005', 'GB14W', 1134.80, 'UNI 1', 'Fabrijeans / Costa C'),
+    ('P-Samidel-GB14W-005', 'GB14W', 3922.00, 'UNI 1', 'Samidel'),
+    ('P-Fabrijeans_CostaC-GB14W-006', 'GB14W', 725.40, 'UNI Evergreen A1', 'Fabrijeans / Costa C'),
+    ('P-Samidel-Guana-001', 'Guana', 796.70, 'S32 Pepper Grey B5', 'Samidel'),
+    ('P-Samidel-Guana-002', 'Guana', 1465.90, 'TW6 Midnight Blue 10', 'Samidel'),
+    ('P-Fabrijeans_CostaC-Guana-001', 'Guana', 1387.10, 'S32 Cool Brown C2', 'Fabrijeans / Costa C'),
+    ('P-Fabrijeans_CostaC-Guana-002', 'Guana', 975.50, '089 Grey Flint B15', 'Fabrijeans / Costa C'),
+    ('P-Samidel-TCD340_RY1-001', 'TCD340/RY1', 60.99, 'Berry Pinstripe', 'Samidel'),
+    ('P-Fabrijeans_CostaC-TCE278_F1-001', 'TCE278/F1', 5755.33, 'Signature Dark Brown', 'Fabrijeans / Costa C'),
 ]
 
 REAL_CONSUMPTIONS = [
-    ('POAPS2000004300', 'Women\'s Winter \'26 - Women Serene Short Jacket Ber', 50, 57.50, 60.99, 6.07, '2026-07-18', 'SAMIDEL - CONFECÇÕES LDA', 'Real: 1.220 m/pc | Esperado: 1.15 m/pc'),
-    ('POAPS2000004404', 'Autumn \'26 - Ease Pants Black Slim (Use all fabric', 835, 1085.50, 1186.00, 9.26, '2026-07-18', 'SAMIDEL - CONFECÇÕES LDA', 'Real: 1.420 m/pc | Esperado: 1.30 m/pc'),
-    ('POAPS2000004405', 'Autumn \'26 - Ease Pants Black Regular (Use all fab', 1001, 1361.36, 1478.00, 8.57, '2026-07-18', 'SAMIDEL - CONFECÇÕES LDA', 'Real: 1.477 m/pc | Esperado: 1.36 m/pc'),
-    ('POAPS2000004406', 'Autumn \'26 - Ease Pants Black Relaxed (Use all fab', 857, 1362.63, 1258.00, -7.68, '2026-07-18', 'SAMIDEL - CONFECÇÕES LDA', 'Real: 1.468 m/pc | Esperado: 1.59 m/pc'),
-    ('POAPS2000004407', 'Autumn \'26 - Ease Pants Dark Grey Slim (Use all fa', 491, 638.30, 643.70, 0.85, '2026-07-18', 'SAMIDEL - CONFECÇÕES LDA', 'Real: 1.311 m/pc | Esperado: 1.30 m/pc'),
-    ('POAPS2000004408', 'Autumn \'26 - Ease Pants Dark Grey Regular (Use all', 699, 950.64, 951.70, 0.11, '2026-07-18', 'SAMIDEL - CONFECÇÕES LDA', 'Real: 1.362 m/pc | Esperado: 1.36 m/pc'),
-    ('POAPS2000004409', 'Autumn \'26 - Ease Pants Dark Grey Relaxed (Use all', 281, 446.79, 419.70, -6.06, '2026-07-18', 'SAMIDEL - CONFECÇÕES LDA', 'Real: 1.494 m/pc | Esperado: 1.59 m/pc'),
-    ('POAPS2000004398', 'Autumn \'26 - Ease Pants Sahara Slim (Use all fabri', 571, 742.30, 750.05, 1.04, '2026-07-18', 'SAMIDEL - CONFECÇÕES LDA', 'Real: 1.314 m/pc | Esperado: 1.30 m/pc'),
-    ('POAPS2000004399', 'Autumn \'26 - Ease Pants Sahara Regular (Use all fa', 350, 476.00, 500.05, 5.05, '2026-07-18', 'SAMIDEL - CONFECÇÕES LDA', 'Real: 1.429 m/pc | Esperado: 1.36 m/pc'),
-    ('POAPS2000004400', 'Autumn \'26 - Ease Pants Sahara Relaxed (Use all fa', 352, 559.68, 522.05, -6.72, '2026-07-18', 'SAMIDEL - CONFECÇÕES LDA', 'Real: 1.483 m/pc | Esperado: 1.59 m/pc'),
-    ('POAPS2000004395', 'Autumn \'26 - Ease Pants Mocha Slim (Use all fabric', 575, 747.50, 788.40, 5.47, '2026-07-18', 'SAMIDEL - CONFECÇÕES LDA', 'Real: 1.371 m/pc | Esperado: 1.30 m/pc'),
-    ('POAPS2000004396', 'Autumn \'26 - Ease Pants Mocha Regular (Use all fab', 347, 471.92, 519.40, 10.06, '2026-07-18', 'SAMIDEL - CONFECÇÕES LDA', 'Real: 1.497 m/pc | Esperado: 1.36 m/pc'),
-    ('POAPS2000004397', 'Autumn \'26 - Ease Pants Mocha Relaxed (Use all fab', 277, 440.43, 424.40, -3.64, '2026-07-18', 'SAMIDEL - CONFECÇÕES LDA', 'Real: 1.532 m/pc | Esperado: 1.59 m/pc'),
-    ('POAPS2000004401', 'Autumn \'26 - Ease Pants Blue Nights Slim (Use all ', 250, 325.00, 328.50, 1.08, '2026-07-18', 'SAMIDEL - CONFECÇÕES LDA', 'Real: 1.314 m/pc | Esperado: 1.30 m/pc'),
-    ('POAPS2000004402', 'Autumn \'26 - Ease Pants Blue Nights Regular (Use a', 722, 981.92, 1024.50, 4.34, '2026-07-18', 'SAMIDEL - CONFECÇÕES LDA', 'Real: 1.419 m/pc | Esperado: 1.36 m/pc'),
-    ('POAPS2000004403', 'Autumn \'26 - Ease Pants Blue Nights Relaxed (Use a', 752, 1195.68, 1086.60, -9.12, '2026-07-18', 'SAMIDEL - CONFECÇÕES LDA', 'Real: 1.445 m/pc | Esperado: 1.59 m/pc'),
-    ('POAPS2000004348', 'NOOS - Essential Suit Pants Regular Almond', 560, 756.00, 765.00, 1.19, '2026-07-18', 'Costa Correia & Ca Lda.', 'Real: 1.366 m/pc | Esperado: 1.35 m/pc'),
-    ('POAPS2000004349', 'NOOS - Essential Suit Pants Slim Almond', 373, 503.55, 480.00, -4.68, '2026-07-18', 'Costa Correia & Ca Lda.', 'Real: 1.287 m/pc | Esperado: 1.35 m/pc'),
-    ('POAPS2000004350', 'NOOS - Essential Suit Pants Slim Midnight Blue', 328, 442.80, 465.00, 5.01, '2026-07-18', 'Costa Correia & Ca Lda.', 'Real: 1.418 m/pc | Esperado: 1.35 m/pc'),
-    ('POAPS2000004351', 'NOOS - Essential Suit Pants Regular Midnight Blue', 262, 353.70, 362.00, 2.35, '2026-07-18', 'Costa Correia & Ca Lda.', 'Real: 1.382 m/pc | Esperado: 1.35 m/pc'),
-    ('POAPS2000004198', 'Autumn \'26 - Gen. 2.0 Pants Signature Dark Brown (', 4524, 6107.40, 5755.33, -5.76, '2026-07-18', 'Fabrijeans - Confecções Lda', 'Real: 1.272 m/pc | Esperado: 1.35 m/pc'),
-    ('POAPS2000004353', 'NOOS - Essential Suit Pants Regular Dark Grey Mela', 153, 206.55, 229.79, 11.25, '2026-07-18', 'Costa Correia & Ca Lda.', 'Real: 1.502 m/pc | Esperado: 1.35 m/pc'),
-    ('POAPS2000004352', 'NOOS - Essential Suit Pants Regular Pine Green', 150, 202.50, 208.97, 3.2, '2026-07-18', 'Costa Correia & Ca Lda.', 'Real: 1.393 m/pc | Esperado: 1.35 m/pc'),
-    ('POAPS2000004233', 'Women\'s Autumn \'26 - Women Nara Pants Straight Coo', 936, 1263.60, 1387.10, 9.77, '2026-07-18', 'Costa Correia & Ca Lda.', 'Real: 1.482 m/pc | Esperado: 1.35 m/pc'),
-    ('POAPS2000004378', 'Restock - Women Ease Pants Straight Steel Melange ', 20, 27.00, 30.00, 11.11, '2026-07-18', 'Costa Correia & Ca Lda.', 'Real: 1.500 m/pc | Esperado: 1.35 m/pc'),
-    ('POAPS2000004384', 'Women\'s Autumn \'26 - Women Ease Pants Tapered Blue', 177, 238.95, 229.00, -4.16, '2026-07-18', 'Costa Correia & Ca Lda.', 'Real: 1.294 m/pc | Esperado: 1.35 m/pc'),
-    ('POAPS2000004385', 'Women\'s Autumn \'26 - Women Ease Pants Straight Blu', 301, 406.35, 444.00, 9.27, '2026-07-18', 'Costa Correia & Ca Lda.', 'Real: 1.475 m/pc | Esperado: 1.35 m/pc'),
-    ('POAPS2000004376', 'Restock - Women Ease Pants Straight Vanilla Melang', 60, 81.00, 88.00, 8.64, '2026-07-18', 'Costa Correia & Ca Lda.', 'Real: 1.467 m/pc | Esperado: 1.35 m/pc'),
-    ('POAPS2000004377', 'Restock - Women Ease Pants Wide Vanilla Melange (U', 76, 102.60, 124.00, 20.86, '2026-07-18', 'Costa Correia & Ca Lda.', 'Real: 1.632 m/pc | Esperado: 1.35 m/pc'),
-    ('POAPS2000004234', 'Women\'s Autumn \'26 - Women Nara Pants Straight Gre', 656, 885.60, 975.50, 10.15, '2026-07-18', 'Costa Correia & Ca Lda.', 'Real: 1.487 m/pc | Esperado: 1.35 m/pc'),
-    ('POAPS2000004387', 'Women\'s Autumn \'26 - Women Ease Pants Straight Bla', 538, 726.30, 809.00, 11.39, '2026-07-18', 'Costa Correia & Ca Lda.', 'Real: 1.504 m/pc | Esperado: 1.35 m/pc'),
-    ('POAPS2000004386', 'Women\'s Autumn \'26 - Women Ease Pants Tapered Blac', 233, 314.55, 325.80, 3.58, '2026-07-18', 'Costa Correia & Ca Lda.', 'Real: 1.398 m/pc | Esperado: 1.35 m/pc'),
-    ('POAPS2000004381', 'Women\'s Autumn \'26 - Women Ease Pants Tapered Moch', 199, 268.65, 258.60, -3.74, '2026-07-18', 'Costa Correia & Ca Lda.', 'Real: 1.299 m/pc | Esperado: 1.35 m/pc'),
-    ('POAPS2000004382', 'Women\'s Autumn \'26 - Women Ease Pants Straight Moc', 558, 753.30, 820.00, 8.85, '2026-07-18', 'Costa Correia & Ca Lda.', 'Real: 1.470 m/pc | Esperado: 1.35 m/pc'),
-    ('POAPS2000004383', 'Women\'s Autumn \'26 - Women Ease Pants Wide Mocha M', 309, 417.15, 506.00, 21.3, '2026-07-18', 'Costa Correia & Ca Lda.', 'Real: 1.638 m/pc | Esperado: 1.35 m/pc'),
-    ('POAPS2000004380', 'Women\'s Autumn \'26 - Women Ease Pants Wide Evergre', 263, 355.05, 437.00, 23.08, '2026-07-18', 'Costa Correia & Ca Lda.', 'Real: 1.662 m/pc | Esperado: 1.35 m/pc'),
-    ('POAPS2000004379', 'Women\'s Autumn \'26 - Women Ease Pants Straight Eve', 198, 267.30, 288.40, 7.89, '2026-07-18', 'Costa Correia & Ca Lda.', 'Real: 1.457 m/pc | Esperado: 1.35 m/pc'),
-    ('POAPS2000004252', 'Winter \'26 - Motion Suit Pants Pepper Grey', 603, 814.05, 796.70, -2.13, '2026-07-18', 'SAMIDEL - CONFECÇÕES LDA', 'Real: 1.321 m/pc | Esperado: 1.35 m/pc'),
-    ('POAPS2000004251', 'Winter \'26 - Motion Suit Pants Midnight Blue', 1085, 1464.75, 1465.90, 0.08, '2026-07-18', 'SAMIDEL - CONFECÇÕES LDA', 'Real: 1.351 m/pc | Esperado: 1.35 m/pc'),
+    ('POAPS2000004300', 'Women Serene Short Jacket Berry Pinstripe', 50, 57.50, 60.99, 6.07, '2026-07-18', 'Samidel', 'Real: 1.220 m/pc | Esperado: 1.15 m/pc'),
+    ('POAPS2000004404', 'Ease Pants Black Slim', 835, 1085.50, 1186.00, 9.26, '2026-07-18', 'Samidel', 'Real: 1.420 m/pc | Esperado: 1.30 m/pc'),
+    ('POAPS2000004405', 'Ease Pants Black Regular', 1001, 1361.36, 1478.00, 8.57, '2026-07-18', 'Samidel', 'Real: 1.477 m/pc | Esperado: 1.36 m/pc'),
+    ('POAPS2000004406', 'Ease Pants Black Relaxed', 857, 1362.63, 1258.00, -7.68, '2026-07-18', 'Samidel', 'Real: 1.468 m/pc | Esperado: 1.59 m/pc'),
+    ('POAPS2000004407', 'Ease Pants Dark Grey Slim', 491, 638.30, 643.70, 0.85, '2026-07-18', 'Samidel', 'Real: 1.311 m/pc | Esperado: 1.30 m/pc'),
+    ('POAPS2000004408', 'Ease Pants Dark Grey Regular', 699, 950.64, 951.70, 0.11, '2026-07-18', 'Samidel', 'Real: 1.362 m/pc | Esperado: 1.36 m/pc'),
+    ('POAPS2000004409', 'Ease Pants Dark Grey Relaxed', 281, 446.79, 419.70, -6.06, '2026-07-18', 'Samidel', 'Real: 1.494 m/pc | Esperado: 1.59 m/pc'),
+    ('POAPS2000004398', 'Ease Pants Sahara Slim', 571, 742.30, 750.05, 1.04, '2026-07-18', 'Samidel', 'Real: 1.314 m/pc | Esperado: 1.30 m/pc'),
+    ('POAPS2000004399', 'Ease Pants Sahara Regular', 350, 476.00, 500.05, 5.05, '2026-07-18', 'Samidel', 'Real: 1.429 m/pc | Esperado: 1.36 m/pc'),
+    ('POAPS2000004400', 'Ease Pants Sahara Relaxed', 352, 559.68, 522.05, -6.72, '2026-07-18', 'Samidel', 'Real: 1.483 m/pc | Esperado: 1.59 m/pc'),
+    ('POAPS2000004395', 'Ease Pants Mocha Slim', 575, 747.50, 788.40, 5.47, '2026-07-18', 'Samidel', 'Real: 1.371 m/pc | Esperado: 1.30 m/pc'),
+    ('POAPS2000004396', 'Ease Pants Mocha Regular', 347, 471.92, 519.40, 10.06, '2026-07-18', 'Samidel', 'Real: 1.497 m/pc | Esperado: 1.36 m/pc'),
+    ('POAPS2000004397', 'Ease Pants Mocha Relaxed', 277, 440.43, 424.40, -3.64, '2026-07-18', 'Samidel', 'Real: 1.532 m/pc | Esperado: 1.59 m/pc'),
+    ('POAPS2000004401', 'Ease Pants Blue Nights Slim', 250, 325.00, 328.50, 1.08, '2026-07-18', 'Samidel', 'Real: 1.314 m/pc | Esperado: 1.30 m/pc'),
+    ('POAPS2000004402', 'Ease Pants Blue Nights Regular', 722, 981.92, 1024.50, 4.34, '2026-07-18', 'Samidel', 'Real: 1.419 m/pc | Esperado: 1.36 m/pc'),
+    ('POAPS2000004403', 'Ease Pants Blue Nights Relaxed', 752, 1195.68, 1086.60, -9.12, '2026-07-18', 'Samidel', 'Real: 1.445 m/pc | Esperado: 1.59 m/pc'),
+    ('POAPS2000004348', 'Essential Suit Pants Regular Almond', 560, 756.00, 765.00, 1.19, '2026-07-18', 'Costa Correia', 'Real: 1.366 m/pc | Esperado: 1.35 m/pc'),
+    ('POAPS2000004349', 'Essential Suit Pants Slim Almond', 373, 503.55, 480.00, -4.68, '2026-07-18', 'Costa Correia', 'Real: 1.287 m/pc | Esperado: 1.35 m/pc'),
+    ('POAPS2000004350', 'Essential Suit Pants Slim Midnight Blue', 328, 442.80, 465.00, 5.01, '2026-07-18', 'Costa Correia', 'Real: 1.418 m/pc | Esperado: 1.35 m/pc'),
+    ('POAPS2000004351', 'Essential Suit Pants Regular Midnight Blue', 262, 353.70, 362.00, 2.35, '2026-07-18', 'Costa Correia', 'Real: 1.382 m/pc | Esperado: 1.35 m/pc'),
+    ('POAPS2000004198', 'Gen. 2.0 Pants Signature Dark Brown', 4524, 6107.40, 5755.33, -5.76, '2026-07-18', 'Fabrijeans', 'Real: 1.272 m/pc | Esperado: 1.35 m/pc'),
+    ('POAPS2000004353', 'Essential Suit Pants Regular Dark Grey Melange', 153, 206.55, 229.79, 11.25, '2026-07-18', 'Costa Correia', 'Real: 1.502 m/pc | Esperado: 1.35 m/pc'),
+    ('POAPS2000004352', 'Essential Suit Pants Regular Pine Green', 150, 202.50, 208.97, 3.2, '2026-07-18', 'Costa Correia', 'Real: 1.393 m/pc | Esperado: 1.35 m/pc'),
+    ('POAPS2000004233', 'Women Nara Pants Straight Cool Brown', 936, 1263.60, 1387.10, 9.77, '2026-07-18', 'Costa Correia', 'Real: 1.482 m/pc | Esperado: 1.35 m/pc'),
+    ('POAPS2000004378', 'Women Ease Pants Straight Steel Melange', 20, 27.00, 30.00, 11.11, '2026-07-18', 'Costa Correia', 'Real: 1.500 m/pc | Esperado: 1.35 m/pc'),
+    ('POAPS2000004384', 'Women Ease Pants Tapered Blue Nights', 177, 238.95, 229.00, -4.16, '2026-07-18', 'Costa Correia', 'Real: 1.294 m/pc | Esperado: 1.35 m/pc'),
+    ('POAPS2000004385', 'Women Ease Pants Straight Blue Nights', 301, 406.35, 444.00, 9.27, '2026-07-18', 'Costa Correia', 'Real: 1.475 m/pc | Esperado: 1.35 m/pc'),
+    ('POAPS2000004376', 'Women Ease Pants Straight Vanilla Melange', 60, 81.00, 88.00, 8.64, '2026-07-18', 'Costa Correia', 'Real: 1.467 m/pc | Esperado: 1.35 m/pc'),
+    ('POAPS2000004377', 'Women Ease Pants Wide Vanilla Melange', 76, 102.60, 124.00, 20.86, '2026-07-18', 'Costa Correia', 'Real: 1.632 m/pc | Esperado: 1.35 m/pc'),
+    ('POAPS2000004234', 'Women Nara Pants Straight Grey Flint', 656, 885.60, 975.50, 10.15, '2026-07-18', 'Costa Correia', 'Real: 1.487 m/pc | Esperado: 1.35 m/pc'),
+    ('POAPS2000004387', 'Women Ease Pants Straight Black', 538, 726.30, 809.00, 11.39, '2026-07-18', 'Costa Correia', 'Real: 1.504 m/pc | Esperado: 1.35 m/pc'),
+    ('POAPS2000004386', 'Women Ease Pants Tapered Black', 233, 314.55, 325.80, 3.58, '2026-07-18', 'Costa Correia', 'Real: 1.398 m/pc | Esperado: 1.35 m/pc'),
+    ('POAPS2000004381', 'Women Ease Pants Tapered Mocha Melange', 199, 268.65, 258.60, -3.74, '2026-07-18', 'Costa Correia', 'Real: 1.299 m/pc | Esperado: 1.35 m/pc'),
+    ('POAPS2000004382', 'Women Ease Pants Straight Mocha Melange', 558, 753.30, 820.00, 8.85, '2026-07-18', 'Costa Correia', 'Real: 1.470 m/pc | Esperado: 1.35 m/pc'),
+    ('POAPS2000004383', 'Women Ease Pants Wide Mocha Melange', 309, 417.15, 506.00, 21.3, '2026-07-18', 'Costa Correia', 'Real: 1.638 m/pc | Esperado: 1.35 m/pc'),
+    ('POAPS2000004380', 'Women Ease Pants Wide Evergreen', 263, 355.05, 437.00, 23.08, '2026-07-18', 'Costa Correia', 'Real: 1.662 m/pc | Esperado: 1.35 m/pc'),
+    ('POAPS2000004379', 'Women Ease Pants Straight Evergreen', 198, 267.30, 288.40, 7.89, '2026-07-18', 'Costa Correia', 'Real: 1.457 m/pc | Esperado: 1.35 m/pc'),
+    ('POAPS2000004252', 'Motion Suit Pants Pepper Grey', 603, 814.05, 796.70, -2.13, '2026-07-18', 'Samidel', 'Real: 1.321 m/pc | Esperado: 1.35 m/pc'),
+    ('POAPS2000004251', 'Motion Suit Pants Midnight Blue', 1085, 1464.75, 1465.90, 0.08, '2026-07-18', 'Samidel', 'Real: 1.351 m/pc | Esperado: 1.35 m/pc'),
 ]
 
 
@@ -583,22 +602,14 @@ def init_db():
     cursor = conn.cursor()
 
     cursor.executescript("""
-    DROP TABLE IF EXISTS movements;
-    DROP TABLE IF EXISTS consumptions;
-    DROP TABLE IF EXISTS consumption_map;
-    DROP TABLE IF EXISTS production;
-    DROP TABLE IF EXISTS incoming_fabric;
-    DROP TABLE IF EXISTS fabric_rolls;
-    DROP TABLE IF EXISTS fabric_refs;
-
-    CREATE TABLE fabric_refs (
+    CREATE TABLE IF NOT EXISTS fabric_refs (
         ref_code TEXT PRIMARY KEY,
         description TEXT,
         supplier TEXT,
         reorder_point REAL DEFAULT 500,
         unit TEXT DEFAULT 'm'
     );
-    CREATE TABLE fabric_rolls (
+    CREATE TABLE IF NOT EXISTS fabric_rolls (
         token TEXT PRIMARY KEY,
         ref_code TEXT NOT NULL,
         metres REAL NOT NULL,
@@ -611,7 +622,7 @@ def init_db():
         date_last_move TEXT,
         notes TEXT
     );
-    CREATE TABLE incoming_fabric (
+    CREATE TABLE IF NOT EXISTS incoming_fabric (
         po_number TEXT PRIMARY KEY,
         supplier TEXT NOT NULL,
         ref_code TEXT,
@@ -621,7 +632,7 @@ def init_db():
         tracking_ref TEXT,
         date_created TEXT
     );
-    CREATE TABLE production (
+    CREATE TABLE IF NOT EXISTS production (
         po_number TEXT PRIMARY KEY,
         model_name TEXT NOT NULL,
         confeccionador TEXT NOT NULL,
@@ -632,14 +643,14 @@ def init_db():
         status TEXT DEFAULT 'PENDING',
         date_created TEXT
     );
-    CREATE TABLE consumption_map (
+    CREATE TABLE IF NOT EXISTS consumption_map (
         model_name TEXT NOT NULL,
         fabric_ref TEXT NOT NULL,
         m_per_pc_expected REAL NOT NULL,
         m_per_pc_actual REAL,
         PRIMARY KEY (model_name, fabric_ref)
     );
-    CREATE TABLE consumptions (
+    CREATE TABLE IF NOT EXISTS consumptions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         po_garment TEXT NOT NULL,
         model_name TEXT,
@@ -651,7 +662,7 @@ def init_db():
         confeccionador TEXT,
         notes TEXT
     );
-    CREATE TABLE movements (
+    CREATE TABLE IF NOT EXISTS movements (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         date_time TEXT NOT NULL,
         move_type TEXT NOT NULL,
@@ -681,36 +692,44 @@ def init_db():
         for model, ref, mpc in CONSUMPTION_MAP:
             cursor.execute("INSERT OR IGNORE INTO consumption_map VALUES (?,?,?,?)", (model, ref, mpc, None))
 
-        for token, ref, metres, lot, wh, status, po_fab in FABRIC_ROLLS:
+        for token, ref, metres, lot, wh in FABRIC_ROLLS:
             cursor.execute("INSERT INTO fabric_rolls VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                         (token, ref, metres, lot, None, wh, status, None, 
+                         (token, ref, metres, lot, None, wh, 'AVAILABLE', None,
                           datetime.now().isoformat(), datetime.now().isoformat(), None))
 
-        # In-process stock (confeccionadores)
-        for token, ref, metres, conf, status in IN_PROCESS_STOCK:
+        # In-process stock (confeccionadores) — lotes agregados com token P-
+        for token, ref, metres, color, conf in IN_PROCESS_STOCK:
             cursor.execute("INSERT INTO fabric_rolls VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                         (token, ref, metres, None, None, conf, status, None,
+                         (token, ref, metres, None, color, conf, 'IN_PROCESS', None,
                           datetime.now().isoformat(), datetime.now().isoformat(), f'Lote agregado em {conf}'))
 
-        # Real consumptions with deviations
+        # Consumos reais CW28/29 com desvios
         for po, model, pcs, exp_m, act_m, dev, date, conf, notes in REAL_CONSUMPTIONS:
             cursor.execute("INSERT INTO consumptions VALUES (NULL,?,?,?,?,?,?,?,?,?)",
                          (po, model, pcs, exp_m, act_m, dev, date, conf, notes))
-            if model:
-                cursor.execute("SELECT AVG(metres_actual / CAST(pcs_cut AS REAL)) FROM consumptions WHERE model_name = ? AND pcs_cut > 0", (model,))
-                avg = cursor.fetchone()[0]
-                if avg:
-                    cursor.execute("UPDATE consumption_map SET m_per_pc_actual = ? WHERE model_name = ?", (round(avg, 3), model))
+
+        # Atualizar real médio no mapa de consumos
+        cursor.execute("""
+            UPDATE consumption_map SET m_per_pc_actual = (
+                SELECT ROUND(AVG(c.metres_actual / CAST(c.pcs_cut AS REAL)), 3)
+                FROM consumptions c
+                WHERE c.pcs_cut > 0 AND (
+                    c.model_name = consumption_map.model_name
+                    OR c.model_name LIKE '%' || REPLACE(consumption_map.model_name, ' Men Plain', '') || '%'
+                )
+            )
+        """)
 
     conn.commit()
     conn.close()
 
 init_db()
 
+
 # ===================== STOCK CALCULATIONS =====================
 def get_stock_position():
     query = """
-    SELECT 
+    SELECT
         fr.ref_code,
         fr.description,
         fr.reorder_point,
@@ -727,8 +746,9 @@ def get_stock_position():
     incoming_df = query_to_df("SELECT ref_code, COALESCE(SUM(total_metres), 0) as a_chegar FROM incoming_fabric WHERE status IN ('EXPECTED', 'IN_TRANSIT') GROUP BY ref_code")
     necessity_df = query_to_df("SELECT fabric_ref, COALESCE(SUM(metres_expected), 0) as necessidade FROM production WHERE status IN ('PENDING', 'CUTTING', 'SEWING') GROUP BY fabric_ref")
 
-    result = stock_df.merge(incoming_df, left_on='ref_code', right_on='ref_code', how='left')
+    result = stock_df.merge(incoming_df, on='ref_code', how='left')
     result = result.merge(necessity_df, left_on='ref_code', right_on='fabric_ref', how='left')
+    result = result.drop(columns=['fabric_ref'], errors='ignore')
     result = result.fillna(0)
 
     result['stock_liquido'] = result['disponivel'] + result['em_processo']
@@ -744,40 +764,50 @@ def get_stock_position():
     return result
 
 # ===================== EXPORT =====================
-def export_stock_summary():
-    df = get_stock_position()
+def to_excel(df, sheet_name='Dados'):
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df.to_excel(writer, sheet_name='Stock Resumido', index=False)
+        df.to_excel(writer, sheet_name=sheet_name, index=False)
     output.seek(0)
     return output
+
+def to_csv(df):
+    return df.to_csv(index=False).encode('utf-8-sig')
+
+def export_stock_summary():
+    return to_excel(get_stock_position(), 'Stock Resumido')
 
 def export_stock_detailed():
     df = query_to_df("SELECT * FROM fabric_rolls ORDER BY ref_code, token")
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df.to_excel(writer, sheet_name='Stock Detalhado', index=False)
-    output.seek(0)
-    return output
+    return to_excel(df, 'Stock Detalhado')
 
 def safe_display_df(df):
-    """Clean DataFrame to avoid PyArrow segfault"""
+    """Limpa DataFrame para evitar PyArrow segfault"""
+    df = df.copy()
     df = df.fillna('')
     for col in df.columns:
         if df[col].dtype == 'object':
             df[col] = df[col].astype(str)
     return df
 
+def download_pair(df, base_name, excel_sheet='Dados', key_prefix='dl'):
+    """Botões gémeos de download Excel + CSV."""
+    c1, c2 = st.columns(2)
+    with c1:
+        st.download_button("⬇️ Excel", to_excel(df, excel_sheet), f"{base_name}.xlsx",
+                           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key=f"{key_prefix}_xlsx")
+    with c2:
+        st.download_button("⬇️ CSV", to_csv(df), f"{base_name}.csv", "text/csv", key=f"{key_prefix}_csv")
 
-# ===================== UI: DASHBOARD (PRO) =====================
+
+# ===================== UI: DASHBOARD =====================
 def render_dashboard():
-    # Header
     st.markdown("""
     <div class="main-header">
         <div style="display:flex;justify-content:space-between;align-items:center;">
             <div>
                 <h1>🏭 SNT CMT</h1>
-                <p>Sistema de Stock & Produção v3.2 | CW29 2026</p>
+                <p>Sistema de Stock & Produção v3.3 | CW29 2026</p>
             </div>
             <div class="live-badge"><span class="live-dot"></span> LIVE</div>
         </div>
@@ -787,16 +817,16 @@ def render_dashboard():
     try:
         stock_df = get_stock_position()
 
-        # KPI Cards
-        st.markdown('<div class="kpi-container">', unsafe_allow_html=True)
+        n_incoming = query_to_df("SELECT COUNT(*) as c FROM incoming_fabric WHERE status IN ('EXPECTED','IN_TRANSIT')").iloc[0]['c']
+        n_pending = query_to_df("SELECT COUNT(*) as c FROM production WHERE status != 'INVOICED'").iloc[0]['c']
 
         kpi_data = [
-            ("STOCK TOTAL TECIDO", stock_df['disponivel'].sum(), "+8% vs semana anterior", "up"),
-            ("TECIDO A CHEGAR", stock_df['a_chegar'].sum(), f"{len(INCOMING_FABRIC)} POs pendentes", "info"),
-            ("EM PROCESSO (CORTE)", stock_df['em_processo'].sum(), f"{len([p for p in PRODUCTION if p[7] == 'PENDING'])} POs garment ativas", "warn"),
-            ("NECESSIDADE PENDENTE", stock_df['necessidade'].sum(), "cobre 92% com entradas", "down"),
-            ("POSIÇÃO LÍQUIDA", stock_df['stock_liquido'].sum(), "stock + em processo", "up"),
-            ("POSIÇÃO PLANEAMENTO", stock_df['planeamento'].sum(), "inclui a chegar − necessidade", "info"),
+            ("STOCK DISPONÍVEL", stock_df['disponivel'].sum(), "rolos em armazém", "up"),
+            ("EM PROCESSO (CONF.)", stock_df['em_processo'].sum(), f"{n_pending} POs garment ativas", "warn"),
+            ("A CHEGAR", stock_df['a_chegar'].sum(), f"{n_incoming} POs tecido pendentes", "info"),
+            ("NECESSIDADE PENDENTE", stock_df['necessidade'].sum(), "POs garment por faturar", "down"),
+            ("POSIÇÃO LÍQUIDA", stock_df['stock_liquido'].sum(), "disponível + em processo", "up"),
+            ("POSIÇÃO PLANEAMENTO", stock_df['planeamento'].sum(), "líquido + a chegar − necessidade", "info"),
         ]
 
         cols = st.columns(6)
@@ -810,9 +840,7 @@ def render_dashboard():
                 </div>
                 """, unsafe_allow_html=True)
 
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        # Alert Bar
+        # Alertas
         st.markdown('<div class="section-title">Alertas do Sistema</div>', unsafe_allow_html=True)
 
         critical = stock_df[stock_df['status'].str.contains('falha crítica')]
@@ -821,39 +849,32 @@ def render_dashboard():
         ok = stock_df[stock_df['status'].str.contains('ok')]
 
         alerts_html = '<div class="alert-bar">'
-
         if not critical.empty:
             for _, row in critical.iterrows():
-                alerts_html += f'<div class="alert-chip critical"><span class="alert-dot"></span>Falha Crítica: {row["ref_code"]} — posição líquida {row["planeamento"]:,.0f}m</div>'
-
+                alerts_html += f'<div class="alert-chip critical"><span class="alert-dot"></span>Falha Crítica: {row["ref_code"]} — planeamento {row["planeamento"]:,.0f}m</div>'
         if not warning.empty:
-            for _, row in warning.iterrows():
-                alerts_html += f'<div class="alert-chip warning"><span class="alert-dot"></span>Stock Baixo: {row["ref_code"]} — disponível {row["disponivel"]:,.0f}m < reorder {row["reorder_point"]:,.0f}m</div>'
-
+            for _, row in warning.head(4).iterrows():
+                alerts_html += f'<div class="alert-chip warning"><span class="alert-dot"></span>Stock Baixo: {row["ref_code"]} — {row["disponivel"]:,.0f}m &lt; reorder {row["reorder_point"]:,.0f}m</div>'
         if not risk.empty:
-            for _, row in risk.iterrows():
-                alerts_html += f'<div class="alert-chip info"><span class="alert-dot"></span>Risco: {row["ref_code"]} — necessidade > disponível + em processo</div>'
-
+            for _, row in risk.head(4).iterrows():
+                alerts_html += f'<div class="alert-chip info"><span class="alert-dot"></span>Risco: {row["ref_code"]} — necessidade &gt; stock líquido</div>'
         if not ok.empty:
             ok_refs = ', '.join(ok['ref_code'].head(3).tolist())
             alerts_html += f'<div class="alert-chip ok"><span class="alert-dot"></span>{ok_refs} — equilibrados</div>'
-
         alerts_html += '</div>'
         st.markdown(alerts_html, unsafe_allow_html=True)
 
-        # Stock Position Table
+        # Posição de stock
         st.markdown('<div class="section-title">Posição de Stock por Referência de Tecido</div>', unsafe_allow_html=True)
         st.markdown('<div class="section-subtitle">stock líquido = disponível + em processo | planeamento = líquido + a chegar − necessidade</div>', unsafe_allow_html=True)
 
         display_df = stock_df[['ref_code', 'description', 'disponivel', 'em_processo', 'stock_liquido', 'a_chegar', 'necessidade', 'planeamento', 'status']].copy()
         display_df = safe_display_df(display_df)
         display_df.columns = ['Ref', 'Descrição', 'Disponível', 'Em Processo', 'Stock Líquido', 'A Chegar', 'Necessidade', 'Planeamento', 'Status']
-
         st.dataframe(display_df, use_container_width=True, hide_index=True, height=400)
 
-        # Production Pipeline
+        # Pipeline
         st.markdown('<div class="section-title">Pipeline de Produção por Confeccionador</div>', unsafe_allow_html=True)
-
         prod_summary = query_to_df("""
             SELECT confeccionador, COUNT(*) as num_pos, SUM(po_qty) as total_pcs, SUM(metres_expected) as total_m
             FROM production WHERE status != 'INVOICED' GROUP BY confeccionador ORDER BY total_m DESC
@@ -868,16 +889,16 @@ def render_dashboard():
         st.info("A base de dados pode estar a inicializar. Aguarde e recarregue.")
 
 
-# ===================== UI: STOCK (PRO) =====================
+# ===================== UI: STOCK =====================
 def render_stock():
     st.markdown('<div class="section-title">📦 Stock por Armazém</div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-subtitle">7 locais: SNT Central, Riopele, e 5 confeccionadores</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-subtitle">armazéns centrais + confeccionadores com lotes agregados</div>', unsafe_allow_html=True)
 
     try:
-        # Warehouse cards
         wh_df = query_to_df("""
-            SELECT warehouse, ref_code, status, COUNT(*) as num_rolls, COALESCE(SUM(metres), 0) as total_metres 
-            FROM fabric_rolls GROUP BY warehouse, ref_code, status ORDER BY warehouse, ref_code
+            SELECT warehouse, ref_code, status, COUNT(*) as num_rolls, COALESCE(SUM(metres), 0) as total_metres
+            FROM fabric_rolls WHERE status != 'INVOICED'
+            GROUP BY warehouse, ref_code, status ORDER BY warehouse, ref_code
         """)
 
         if not wh_df.empty:
@@ -886,7 +907,7 @@ def render_stock():
             st.markdown('<div class="wh-grid">', unsafe_allow_html=True)
             for _, row in wh_summary.iterrows():
                 wh_name = row['warehouse']
-                wh_icon = "🏭" if wh_name in ['XBS', 'Riopele'] else "👕"
+                wh_icon = "🏭" if wh_name in WAREHOUSES else "👕"
                 detail_df = wh_df[wh_df['warehouse'] == wh_name]
                 detail_text = " | ".join([f"{r['ref_code']}: {r['total_metres']:,.0f}m" for _, r in detail_df.head(3).iterrows()])
                 in_process = wh_df[(wh_df['warehouse'] == wh_name) & (wh_df['status'] == 'IN_PROCESS')]['total_metres'].sum()
@@ -896,78 +917,50 @@ def render_stock():
                     <div class="wh-name">{wh_icon} {wh_name}</div>
                     <div class="wh-total">{row['total_metres']:,.0f}<span style="font-size:13px;color:#8b9dc3">m</span></div>
                     <div class="wh-detail">{detail_text}</div>
-                    <div class="wh-rolls">{int(row['num_rolls'])} rolos | {in_process:,.0f}m em processo</div>
+                    <div class="wh-rolls">{int(row['num_rolls'])} rolos/lotes | {in_process:,.0f}m em processo</div>
                 </div>
                 """, unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
-        # Filters
-        st.markdown('<div class="section-title">Detalhe de Rolos</div>', unsafe_allow_html=True)
+        # Filtros
+        st.markdown('<div class="section-title">Detalhe de Rolos e Lotes</div>', unsafe_allow_html=True)
 
         col1, col2, col3 = st.columns(3)
         with col1:
-            try:
-                wh_list = query_to_df("SELECT DISTINCT warehouse FROM fabric_rolls")['warehouse'].tolist()
-                warehouses = ['Todos'] + wh_list
-            except:
-                warehouses = ['Todos']
-            selected_wh = st.selectbox("Armazém", warehouses, key="stock_wh")
+            wh_list = query_to_df("SELECT DISTINCT warehouse FROM fabric_rolls ORDER BY warehouse")['warehouse'].tolist()
+            selected_wh = st.selectbox("Armazém", ['Todos'] + wh_list, key="stock_wh")
         with col2:
-            try:
-                ref_list = query_to_df("SELECT DISTINCT ref_code FROM fabric_refs")['ref_code'].tolist()
-                refs = ['Todas'] + ref_list
-            except:
-                refs = ['Todas']
-            selected_ref = st.selectbox("Referência", refs, key="stock_ref")
+            ref_list = query_to_df("SELECT DISTINCT ref_code FROM fabric_rolls ORDER BY ref_code")['ref_code'].tolist()
+            selected_ref = st.selectbox("Referência", ['Todas'] + ref_list, key="stock_ref")
         with col3:
-            status_options = ['Todos', 'AVAILABLE', 'RESERVED', 'IN_PROCESS', 'INVOICED']
-            selected_status = st.selectbox("Status", status_options, key="stock_status")
+            selected_status = st.selectbox("Status", ['Todos'] + ROLL_STATUSES, key="stock_status")
 
-        # Query with filters
-        query = "SELECT token, ref_code, metres, lot, warehouse, status, po_garment, date_received, notes FROM fabric_rolls WHERE 1=1"
+        query = "SELECT token, ref_code, metres, color, lot, warehouse, status, po_garment, notes FROM fabric_rolls WHERE 1=1"
         params = []
         if selected_wh != 'Todos':
-            query += " AND warehouse = ?"
-            params.append(selected_wh)
+            query += " AND warehouse = ?"; params.append(selected_wh)
         if selected_ref != 'Todas':
-            query += " AND ref_code = ?"
-            params.append(selected_ref)
+            query += " AND ref_code = ?"; params.append(selected_ref)
         if selected_status != 'Todos':
-            query += " AND status = ?"
-            params.append(selected_status)
+            query += " AND status = ?"; params.append(selected_status)
         query += " ORDER BY ref_code, token LIMIT 500"
 
         rolls_df = query_to_df(query, params)
-        rolls_df = safe_display_df(rolls_df)
-        rolls_df.columns = ['Token', 'Ref', 'Metros', 'Lote', 'Armazém', 'Status', 'PO Garment', 'Recebido', 'Notas']
+        clean_df = safe_display_df(rolls_df)
+        clean_df.columns = ['Token', 'Ref', 'Metros', 'Cor', 'Lote', 'Armazém', 'Status', 'PO Garment', 'Notas']
+        st.dataframe(clean_df, use_container_width=True, hide_index=True, height=500)
 
-        st.dataframe(rolls_df, use_container_width=True, hide_index=True, height=500)
-
-        # Quick actions
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("📋 Exportar seleção", key="export_stock_sel"):
-                output = BytesIO()
-                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                    rolls_df.to_excel(writer, sheet_name='Stock', index=False)
-                output.seek(0)
-                st.download_button("⬇️ Download", output, f"stock_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        st.markdown('<div class="section-title">Exportar seleção atual</div>', unsafe_allow_html=True)
+        download_pair(rolls_df, f"stock_{datetime.now().strftime('%Y%m%d')}", 'Stock', 'stock_sel')
 
     except Exception as e:
         st.error(f"Erro ao carregar stock: {e}")
 
 
-# ===================== UI: INCOMING (PRO) =====================
+# ===================== UI: INCOMING =====================
 def render_incoming():
     st.markdown('<div class="section-title">🚢 A Chegar</div>', unsafe_allow_html=True)
-
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        st.markdown('<div class="section-subtitle">Encomendas de tecido pendentes — upload de packing lists com deteção automática de colunas</div>', unsafe_allow_html=True)
-    with col2:
-        if st.button("📋 Ver template"):
-            st.info("Template: PO | Fornecedor | Ref | Metros | Data Prevista | Status")
+    st.markdown('<div class="section-subtitle">Encomendas de tecido pendentes — só contam para planeamento, não entram no stock líquido</div>', unsafe_allow_html=True)
 
     incoming_df = query_to_df("""
         SELECT i.po_number, i.supplier, i.ref_code, i.total_metres, i.expected_date, i.status, i.tracking_ref, fr.description
@@ -976,294 +969,486 @@ def render_incoming():
     """)
 
     if not incoming_df.empty:
-        incoming_df = safe_display_df(incoming_df)
-        incoming_df.columns = ['PO', 'Fornecedor', 'Ref', 'Metros', 'Data Prevista', 'Status', 'Tracking', 'Descrição']
-        st.dataframe(incoming_df, use_container_width=True, hide_index=True, height=400)
+        clean = safe_display_df(incoming_df)
+        clean.columns = ['PO', 'Fornecedor', 'Ref', 'Metros', 'Data Prevista', 'Status', 'Tracking', 'Descrição']
+        st.dataframe(clean, use_container_width=True, hide_index=True, height=400)
+
+        # Marcar como recebido → vai para Receção no menu Movimentar
+        st.markdown('<div class="section-title">Marcar chegada</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-subtitle">quando o tecido chega, marca aqui a PO — depois regista os rolos em 🚚 Movimentar → Receção</div>', unsafe_allow_html=True)
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            po_sel = st.selectbox("PO de tecido", incoming_df['po_number'].tolist(), key="incoming_po")
+        with col2:
+            st.markdown('<div style="height:28px"></div>', unsafe_allow_html=True)
+            if st.button("✓ Chegou", key="incoming_arrived"):
+                execute_sql("UPDATE incoming_fabric SET status = 'RECEIVED' WHERE po_number = ?", (po_sel,))
+                log_movement('ARRIVAL', None, 'Fornecedor', 'XBS', None, None, None, f'PO tecido {po_sel} chegou — aguarda registo de rolos')
+                st.success(f"PO {po_sel} marcada como recebida. Regista agora os rolos em 🚚 Movimentar → Receção.")
+                st.rerun()
 
         # Timeline
-        st.markdown('<div class="section-title">Calendário de Chegadas — Próximos 30 Dias</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Calendário de Chegadas</div>', unsafe_allow_html=True)
         st.markdown('<div class="timeline">', unsafe_allow_html=True)
         for _, row in incoming_df.head(10).iterrows():
-            status_class = "completed" if row['Status'] == 'IN_TRANSIT' else "pending"
+            status_class = "completed" if row['status'] == 'IN_TRANSIT' else "pending"
+            tracking = row['tracking_ref'] if row['tracking_ref'] else 'sem rastreio'
             st.markdown(f"""
             <div class="timeline-item {status_class}">
-                <div class="timeline-date">{row['Data Prevista']}</div>
-                <div class="timeline-text">{row['PO']} — {row['Fornecedor']} {row['Ref']} {row['Metros']}m</div>
-                <div class="timeline-meta">{row['Status']} | {row['Tracking'] if row['Tracking'] else 'sem rastreio'}</div>
+                <div class="timeline-date">{row['expected_date']}</div>
+                <div class="timeline-text">{row['po_number']} — {row['supplier']} {row['ref_code']} {row['total_metres']:,.0f}m</div>
+                <div class="timeline-meta">{row['status']} | {tracking}</div>
             </div>
             """, unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
     else:
         st.info("Nenhuma encomenda pendente.")
 
-# ===================== UI: PRODUCTION (PRO) =====================
+
+# ===================== UI: PRODUCTION (MODO LIVE) =====================
 def render_production():
     st.markdown('<div class="section-title">👕 Produção</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-subtitle">modo live: lança consumos de corte, valida desvios e muda estados — tudo por dropdown</div>', unsafe_allow_html=True)
 
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        st.markdown('<div class="section-subtitle">Encomendas garment — upload semanal via Excel com deteção automática de colunas</div>', unsafe_allow_html=True)
-    with col2:
-        if st.button("📋 Ver template garment"):
-            st.info("Template: PO | Modelo | Confeccionador | Qty | Ref Tecido | Data | Status")
+    tab_live, tab_list, tab_status = st.tabs(["⚡ Modo Live — Registar Corte", "📋 POs Ativas", "🔄 Mudar Estado PO"])
 
-    # Status filter tabs
-    tab1, tab2, tab3 = st.tabs(["⏳ Pendentes", "✂️ Em Corte", "🪡 Em Costura"])
-
-    with tab1:
-        prod_df = query_to_df("""
-            SELECT p.po_number, p.model_name, p.confeccionador, p.po_qty, p.fabric_ref, p.metres_expected, p.expected_date, p.status
-            FROM production p WHERE p.status = 'PENDING' ORDER BY p.expected_date
+    # ---------- TAB LIVE ----------
+    with tab_live:
+        active_pos = query_to_df("""
+            SELECT po_number, model_name, confeccionador, po_qty, fabric_ref, metres_expected, status
+            FROM production WHERE status IN ('PENDING', 'CUTTING', 'SEWING') ORDER BY po_number DESC
         """)
-        if not prod_df.empty:
-            prod_df = safe_display_df(prod_df)
-            prod_df.columns = ['PO', 'Modelo', 'Confeccionador', 'Qty', 'Ref', 'Metros', 'Entrega', 'Status']
-            st.dataframe(prod_df, use_container_width=True, hide_index=True, height=400)
-            st.markdown(f'<div class="section-subtitle">{len(prod_df)} POs pendentes | {prod_df["Metros"].astype(float).sum():,.0f}m total</div>', unsafe_allow_html=True)
+
+        if active_pos.empty:
+            st.info("Sem POs ativas para registar corte.")
         else:
-            st.info("Nenhuma PO pendente.")
+            po_options = active_pos['po_number'].tolist()
+            po_sel = st.selectbox("Seleciona a PO garment", po_options, key="live_po",
+                                  format_func=lambda p: f"{p} — {active_pos[active_pos['po_number']==p].iloc[0]['model_name'][:45]}")
 
-    with tab2:
-        cutting_df = query_to_df("SELECT * FROM production WHERE status = 'CUTTING' ORDER BY expected_date")
-        if not cutting_df.empty:
-            cutting_df = safe_display_df(cutting_df)
-            st.dataframe(cutting_df, use_container_width=True, hide_index=True)
-        else:
-            st.info("Nenhuma PO em corte.")
+            po_row = active_pos[active_pos['po_number'] == po_sel].iloc[0]
 
-    with tab3:
-        sewing_df = query_to_df("SELECT * FROM production WHERE status = 'SEWING' ORDER BY expected_date")
-        if not sewing_df.empty:
-            sewing_df = safe_display_df(sewing_df)
-            st.dataframe(sewing_df, use_container_width=True, hide_index=True)
-        else:
-            st.info("Nenhuma PO em costura.")
+            # Consumo esperado do mapa (procura por correspondência de modelo)
+            map_df = query_to_df("SELECT model_name, m_per_pc_expected, m_per_pc_actual FROM consumption_map WHERE fabric_ref = ?", (po_row['fabric_ref'],))
+            expected_mpc = None
+            if not map_df.empty:
+                model_lower = str(po_row['model_name']).lower()
+                for _, m in map_df.iterrows():
+                    key = str(m['model_name']).lower().replace(' men plain', '').replace(' men checked', '').replace(' men striped', '')
+                    if key and key in model_lower:
+                        expected_mpc = m['m_per_pc_actual'] if m['m_per_pc_actual'] else m['m_per_pc_expected']
+                        break
+                if expected_mpc is None:
+                    expected_mpc = map_df.iloc[0]['m_per_pc_expected']
 
-# ===================== UI: CONSUMOS (PRO) =====================
-def render_consumos():
-    st.markdown('<div class="section-title">📊 Consumos</div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-subtitle">Mapa de consumos por modelo — partilhado. Consumos são partilhados por modelo base, não por PO individual.</div>', unsafe_allow_html=True)
+            c1, c2, c3, c4 = st.columns(4)
+            with c1:
+                st.markdown(f"""<div class="info-card" style="text-align:center;">
+                    <div class="dev-label">Confeccionador</div>
+                    <div style="color:#e0e6ed;font-size:16px;font-weight:600;">{po_row['confeccionador']}</div>
+                </div>""", unsafe_allow_html=True)
+            with c2:
+                st.markdown(f"""<div class="info-card" style="text-align:center;">
+                    <div class="dev-label">Peças PO</div>
+                    <div style="color:#e0e6ed;font-size:16px;font-weight:600;">{int(po_row['po_qty'])} pcs</div>
+                </div>""", unsafe_allow_html=True)
+            with c3:
+                st.markdown(f"""<div class="info-card" style="text-align:center;">
+                    <div class="dev-label">Ref Tecido</div>
+                    <div style="color:#e0e6ed;font-size:16px;font-weight:600;">{po_row['fabric_ref'] or '—'}</div>
+                </div>""", unsafe_allow_html=True)
+            with c4:
+                mpc_txt = f"{expected_mpc:.2f} m/pc" if expected_mpc else "sem mapa"
+                st.markdown(f"""<div class="info-card" style="text-align:center;">
+                    <div class="dev-label">Consumo Esperado</div>
+                    <div style="color:#e0e6ed;font-size:16px;font-weight:600;">{mpc_txt}</div>
+                </div>""", unsafe_allow_html=True)
 
-    # Consumption map with visual bars
-    cm_df = query_to_df("""
-        SELECT cm.model_name, cm.fabric_ref, cm.m_per_pc_expected, cm.m_per_pc_actual, fr.description
-        FROM consumption_map cm LEFT JOIN fabric_refs fr ON cm.fabric_ref = fr.ref_code
-        ORDER BY cm.fabric_ref, cm.model_name
-    """)
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                pcs_cut = st.number_input("Peças cortadas", min_value=0, value=int(po_row['po_qty']), step=1, key="live_pcs")
+            with col2:
+                metres_real = st.number_input("Metros reais consumidos", min_value=0.0, step=0.1, key="live_metres",
+                                              value=float(pcs_cut * expected_mpc) if expected_mpc else 0.0)
+            with col3:
+                st.markdown('<div style="height:28px"></div>', unsafe_allow_html=True)
+                confirm_cut = st.button("✓ Registar corte", key="live_confirm")
 
-    if not cm_df.empty:
-        st.markdown('<div style="display:flex;gap:24px;margin-bottom:12px;font-size:12px;color:#8b9dc3;"><span>esperado</span><span>real médio</span><span>desvio > 5%</span></div>', unsafe_allow_html=True)
-
-        for _, row in cm_df.iterrows():
-            expected = row['m_per_pc_expected'] or 0
-            actual = row['m_per_pc_actual'] or 0
-            if expected > 0 and actual > 0:
-                dev = ((actual - expected) / expected) * 100
-                bar_width = min(100, max(50, (actual / expected) * 85))
-                bar_color = "#ef4444" if abs(dev) > 5 else "#22c55e"
-                var_class = "up" if dev > 0 else "down"
-                badge = '<span class="badge" style="background:rgba(239,68,68,0.15);color:#ef4444;">⚠️ desvio</span>' if abs(dev) > 5 else '<span class="badge available">ok</span>'
+            # Validação de desvio em tempo real
+            if pcs_cut > 0 and metres_real > 0 and expected_mpc:
+                real_mpc = metres_real / pcs_cut
+                dev_pct = ((real_mpc - expected_mpc) / expected_mpc) * 100
+                dev_class = "ok" if abs(dev_pct) <= 2 else ("warn" if abs(dev_pct) <= 5 else "bad")
+                dev_color = {"ok": "#22c55e", "warn": "#f59e0b", "bad": "#ef4444"}[dev_class]
+                dev_msg = {"ok": "dentro da tolerância", "warn": "atenção — desvio 2–5%", "bad": "⚠️ DESVIO CRÍTICO > 5%"}[dev_class]
+                st.markdown(f"""
+                <div class="dev-box {dev_class}">
+                    <div class="dev-label">Desvio vs mapa — {dev_msg}</div>
+                    <div class="dev-value" style="color:{dev_color};">{dev_pct:+.1f}%</div>
+                    <div style="color:#8b9dc3;font-size:12px;">real {real_mpc:.3f} m/pc vs esperado {expected_mpc:.3f} m/pc</div>
+                </div>
+                """, unsafe_allow_html=True)
+            elif not expected_mpc:
+                st.warning("⚠️ Este modelo não tem consumo no mapa. O registo fica sem validação de desvio — considera adicioná-lo em 📊 Consumos.")
+                real_mpc, dev_pct = (metres_real / pcs_cut if pcs_cut else 0), None
             else:
-                bar_width = 50
-                bar_color = "#3b82f6"
-                var_class = ""
-                dev = 0
-                badge = '<span class="badge" style="background:rgba(100,116,139,0.15);color:#64748b;">—</span>'
+                real_mpc, dev_pct = 0, None
 
-            st.markdown(f"""
-            <div class="consumo-row">
-                <div class="consumo-model">{row['model_name']}</div>
-                <div class="consumo-fabric">{row['fabric_ref']}</div>
-                <div class="consumo-val">{expected:.2f} m/pc</div>
-                <div class="consumo-bar-bg"><div class="consumo-bar-fill" style="width:{bar_width}%;background:{bar_color};"></div></div>
-                <div class="consumo-val">{actual:.2f} m/pc</div>
-                <div class="consumo-var {var_class}">{dev:+.1f}%</div>
-                {badge}
-            </div>
-            """, unsafe_allow_html=True)
-
-    # Real consumptions table
-    st.markdown('<div class="section-title">Registo de Consumos Reais — Últimos Cortes</div>', unsafe_allow_html=True)
-    cons_df = query_to_df("SELECT * FROM consumptions ORDER BY date_cut DESC")
-    if not cons_df.empty:
-        cons_df = safe_display_df(cons_df)
-        cons_df.columns = ['ID', 'PO Garment', 'Modelo', 'Peças', 'Metros Esperados', 'Metros Reais', 'Desvio %', 'Data Corte', 'Confeccionador', 'Notas']
-        st.dataframe(cons_df, use_container_width=True, hide_index=True, height=350)
-
-        high_dev = cons_df[cons_df['Desvio %'].astype(str).str.replace('%', '').astype(float).abs() > 5]
-        if not high_dev.empty:
-            st.warning(f"⚠️ {len(high_dev)} consumos com desvio > 5%")
-
-    # Flow diagram
-    st.markdown('<div class="section-title">Fluxo de Consumos</div>', unsafe_allow_html=True)
-    st.markdown("""
-    <div class="timeline">
-        <div class="timeline-item completed">
-            <div class="timeline-date">1. PO lançada</div>
-            <div class="timeline-text">Sistema calcula metres_expected = po_qty × m/pc do mapa</div>
-        </div>
-        <div class="timeline-item completed">
-            <div class="timeline-date">2. Após corte</div>
-            <div class="timeline-text">Confeccionador reporta metres_actual via Excel</div>
-        </div>
-        <div class="timeline-item completed">
-            <div class="timeline-date">3. Cruzamento</div>
-            <div class="timeline-text">Sistema calcula desvio e alerta se > 5%</div>
-        </div>
-        <div class="timeline-item pending">
-            <div class="timeline-date">4. Ajuste stock</div>
-            <div class="timeline-text">Sobras/devoluções registadas | stock acertado se necessário</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-
-# ===================== UI: MOVEMENT (PRO) =====================
-def render_movement():
-    st.markdown('<div class="section-title">🚚 Movimentar</div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-subtitle">Novos rolos: token automático | Confeccionadores: metros totais (sem token individual) | Divisível futuramente</div>', unsafe_allow_html=True)
-
-    # Movement type tabs
-    move_tab1, move_tab2, move_tab3 = st.tabs(["🔄 Nova Movimentação", "📦 Receção de Tecido", "📄 Faturação PO"])
-
-    with move_tab1:
-        st.markdown('<div class="movement-form">', unsafe_allow_html=True)
-
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            move_type = st.selectbox("Tipo", ["TRANSFER", "ALLOCATE", "SEND_FACTORY", "RETURN_FACTORY"],
-                format_func=lambda x: {"TRANSFER": "🔄 Transferência", "ALLOCATE": "📌 Alocação",
-                    "SEND_FACTORY": "🏭 Envio conf.", "RETURN_FACTORY": "↩️ Devolução"}.get(x, x),
-                key="move_type")
-        with col2:
-            refs = query_to_df("SELECT ref_code FROM fabric_refs")['ref_code'].tolist()
-            ref_code = st.selectbox("Referência", refs, key="move_ref")
-        with col3:
-            metres = st.number_input("Metros", min_value=0.0, step=0.01, key="move_metres")
-
-        col4, col5, col6 = st.columns(3)
-        with col4:
-            locations = ['XBS', 'Riopele', 'Samidel', 'Costa Correia', 'Tyrrell', 'Acorfato', 'Fabrijeans', 'António & Carla', 'Denimworks', 'Vermis', 'Fornecedor', 'Cliente']
-            from_loc = st.selectbox("De", locations, key="move_from")
-        with col5:
-            to_loc = st.selectbox("Para", locations, index=1, key="move_to")
-        with col6:
-            po_garment = st.text_input("PO garment", placeholder="POAPS200000xxxx", key="move_po")
-
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("✓ Confirmar movimento", key="confirm_move"):
-                if metres <= 0:
-                    st.error("Metros deve ser > 0")
+            if confirm_cut:
+                if pcs_cut <= 0 or metres_real <= 0:
+                    st.error("Peças e metros têm de ser > 0")
                 else:
-                    conn = sqlite3.connect(DB_PATH)
-                    cursor = conn.cursor()
-                    token = None
-                    notes = None
-
-                    if move_type == "ALLOCATE" and po_garment:
-                        cursor.execute("SELECT token FROM fabric_rolls WHERE ref_code = ? AND status = 'AVAILABLE' AND warehouse = ? ORDER BY metres DESC LIMIT 1", (ref_code, from_loc))
-                        roll = cursor.fetchone()
-                        if roll:
-                            cursor.execute("UPDATE fabric_rolls SET status = 'RESERVED', po_garment = ? WHERE token = ?", (po_garment, roll[0]))
-                            token = roll[0]
-                            st.success(f"Rolo {token} reservado para {po_garment}")
-                        else:
-                            st.error("Nenhum rolo disponível")
-
-                    elif move_type == "SEND_FACTORY" and po_garment:
-                        cursor.execute("UPDATE fabric_rolls SET status = 'IN_PROCESS', warehouse = ?, po_garment = ? WHERE po_garment = ? AND status = 'RESERVED'", (to_loc, po_garment, po_garment))
-                        if cursor.rowcount == 0:
-                            cursor.execute("SELECT COUNT(*) FROM fabric_rolls WHERE ref_code = ? AND warehouse = ? AND status = 'IN_PROCESS' AND po_garment = ?", (ref_code, to_loc, po_garment))
-                            if cursor.fetchone()[0] == 0:
-                                agg_token = f"P-{to_loc.replace(' ', '_')}-{ref_code.replace('/', '_')}-001"
-                                cursor.execute("INSERT INTO fabric_rolls VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                                    (agg_token, ref_code, metres, None, None, to_loc, 'IN_PROCESS', po_garment,
-                                     datetime.now().isoformat(), datetime.now().isoformat(), 'Lote agregado'))
-                        st.success(f"Tecido enviado para {to_loc} (em processo)")
-                        token = "TOTAL"
-
-                    elif move_type == "TRANSFER":
-                        cursor.execute("SELECT token FROM fabric_rolls WHERE ref_code = ? AND warehouse = ? AND status = 'AVAILABLE' ORDER BY metres DESC LIMIT 1", (ref_code, from_loc))
-                        roll = cursor.fetchone()
-                        if roll:
-                            cursor.execute("UPDATE fabric_rolls SET warehouse = ?, date_last_move = ? WHERE token = ?", (to_loc, datetime.now().isoformat(), roll[0]))
-                            token = roll[0]
-                            st.success(f"Rolo {token} transferido de {from_loc} para {to_loc}")
-                        else:
-                            st.error("Nenhum rolo disponível para transferir")
-
-                    elif move_type == "RETURN_FACTORY" and po_garment:
-                        cursor.execute("UPDATE fabric_rolls SET status = 'AVAILABLE', warehouse = ?, po_garment = NULL WHERE po_garment = ? AND status = 'IN_PROCESS'", (to_loc, po_garment))
-                        st.success(f"Tecido devolvido de {from_loc} para {to_loc}")
-                        token = "RETURN"
-
-                    execute_sql("INSERT INTO movements (date_time, move_type, token, from_location, to_location, ref_code, metres, po_garment, notes) VALUES (?,?,?,?,?,?,?,?,?)",
-                               (datetime.now().isoformat(), move_type, token, from_loc, to_loc, ref_code, metres, po_garment or None, notes))
-                    conn.commit()
-                    conn.close()
+                    exp_m = round(pcs_cut * expected_mpc, 2) if expected_mpc else None
+                    execute_sql("INSERT INTO consumptions VALUES (NULL,?,?,?,?,?,?,?,?,?)",
+                                (po_sel, po_row['model_name'], pcs_cut, exp_m, metres_real,
+                                 round(dev_pct, 2) if dev_pct is not None else None,
+                                 datetime.now().strftime('%Y-%m-%d'), po_row['confeccionador'],
+                                 f"Live: {real_mpc:.3f} m/pc" if real_mpc else "Live"))
+                    # Atualiza estado da PO para CUTTING se ainda PENDING
+                    if po_row['status'] == 'PENDING':
+                        execute_sql("UPDATE production SET status = 'CUTTING' WHERE po_number = ?", (po_sel,))
+                    # Atualiza real médio no mapa
+                    if expected_mpc:
+                        execute_sql("""
+                            UPDATE consumption_map SET m_per_pc_actual = (
+                                SELECT ROUND(AVG(metres_actual / CAST(pcs_cut AS REAL)), 3)
+                                FROM consumptions WHERE pcs_cut > 0 AND model_name = ?)
+                            WHERE model_name = ?""", (po_row['model_name'], po_row['model_name']))
+                    log_movement('CUT', None, po_row['confeccionador'], po_row['confeccionador'],
+                                 po_row['fabric_ref'], metres_real, po_sel,
+                                 f"Corte registado: {pcs_cut} pcs, {metres_real:.1f}m, desvio {dev_pct:+.1f}%" if dev_pct is not None else f"Corte registado: {pcs_cut} pcs")
+                    st.success(f"✅ Corte registado: {pcs_cut} pcs × {real_mpc:.3f} m/pc = {metres_real:,.1f}m" +
+                               (f" | desvio {dev_pct:+.1f}%" if dev_pct is not None else ""))
                     st.rerun()
 
-        with col2:
-            if st.button("✕ Cancelar", key="cancel_move"):
+    # ---------- TAB LISTA ----------
+    with tab_list:
+        status_filter = st.selectbox("Estado", ['Todas'] + PROD_STATUSES, key="prod_filter")
+        q = "SELECT po_number, model_name, confeccionador, po_qty, fabric_ref, metres_expected, expected_date, status FROM production"
+        if status_filter != 'Todas':
+            q += f" WHERE status = '{status_filter}'"
+        q += " ORDER BY expected_date"
+        prod_df = query_to_df(q)
+        if not prod_df.empty:
+            clean = safe_display_df(prod_df)
+            clean.columns = ['PO', 'Modelo', 'Confeccionador', 'Qty', 'Ref', 'Metros', 'Entrega', 'Status']
+            st.dataframe(clean, use_container_width=True, hide_index=True, height=450)
+            total_m = prod_df['metres_expected'].fillna(0).sum()
+            st.markdown(f'<div class="section-subtitle">{len(prod_df)} POs | {total_m:,.0f}m esperados</div>', unsafe_allow_html=True)
+        else:
+            st.info("Sem POs neste estado.")
+
+    # ---------- TAB STATUS ----------
+    with tab_status:
+        st.markdown('<div class="section-subtitle">mudança de estado por dropdown — INVOICED faz baixa automática dos metros em processo</div>', unsafe_allow_html=True)
+        all_pos = query_to_df("SELECT po_number, model_name, confeccionador, status FROM production ORDER BY po_number DESC")
+        if not all_pos.empty:
+            col1, col2 = st.columns(2)
+            with col1:
+                po_st = st.selectbox("PO garment", all_pos['po_number'].tolist(), key="status_po",
+                                     format_func=lambda p: f"{p} — {all_pos[all_pos['po_number']==p].iloc[0]['status']}")
+            with col2:
+                new_status = st.selectbox("Novo estado", PROD_STATUSES, key="status_new")
+
+            if st.button("✓ Aplicar estado", key="status_apply"):
+                if new_status == 'INVOICED':
+                    # Baixa automática: metros em processo ligados à PO saem do stock
+                    inv = query_to_df("SELECT COALESCE(SUM(metres),0) as m FROM fabric_rolls WHERE po_garment = ? AND status = 'IN_PROCESS'", (po_st,))
+                    invoiced_m = inv.iloc[0]['m']
+                    execute_sql("UPDATE fabric_rolls SET status = 'INVOICED', notes = 'Faturado — saiu de em processo' WHERE po_garment = ? AND status = 'IN_PROCESS'", (po_st,))
+                    execute_sql("UPDATE production SET status = 'INVOICED' WHERE po_number = ?", (po_st,))
+                    log_movement('INVOICE', None, 'Em Processo', 'Faturado', None, invoiced_m, po_st, f'{invoiced_m:.1f}m faturados')
+                    st.success(f"✅ PO {po_st} faturada — {invoiced_m:,.1f}m saíram de em processo.")
+                else:
+                    execute_sql("UPDATE production SET status = ? WHERE po_number = ?", (new_status, po_st))
+                    log_movement('STATUS', None, None, None, None, None, po_st, f'Estado → {new_status}')
+                    st.success(f"✅ PO {po_st} → {new_status}")
                 st.rerun()
 
-    with move_tab2:
-        st.markdown("<div class='info-card'><div class='info-card-title'>📥 Receção de Novo Tecido</div><div class='info-card-text'>Ao receber tecido de fornecedor, o sistema gera token automático: <strong>R-{REF}-{NNN}</strong><br>Cada rolo tem token único, metros exatos, lote/cor e histórico completo.</div></div>", unsafe_allow_html=True)
 
-        col1, col2, col3 = st.columns(3)
-        with col1:
+# ===================== UI: CONSUMOS =====================
+def render_consumos():
+    st.markdown('<div class="section-title">📊 Consumos</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-subtitle">mapa partilhado por modelo base — editável na grelha. desvio > 5% gera alerta.</div>', unsafe_allow_html=True)
+
+    tab_map, tab_real, tab_edit = st.tabs(["📊 Mapa Visual", "🧾 Registos Reais", "✏️ Editar Mapa"])
+
+    with tab_map:
+        cm_df = query_to_df("""
+            SELECT cm.model_name, cm.fabric_ref, cm.m_per_pc_expected, cm.m_per_pc_actual
+            FROM consumption_map cm ORDER BY cm.fabric_ref, cm.model_name
+        """)
+        if not cm_df.empty:
+            st.markdown('<div style="display:flex;gap:24px;margin-bottom:12px;font-size:12px;color:#8b9dc3;"><span>esperado</span><span>real médio</span><span>desvio > 5% = alerta</span></div>', unsafe_allow_html=True)
+            rows_html = ""
+            for _, row in cm_df.iterrows():
+                expected = row['m_per_pc_expected'] or 0
+                actual = row['m_per_pc_actual'] or 0
+                if expected > 0 and actual > 0:
+                    dev = ((actual - expected) / expected) * 100
+                    bar_width = min(100, max(50, (actual / expected) * 85))
+                    bar_color = "#ef4444" if abs(dev) > 5 else "#22c55e"
+                    var_class = "up" if dev > 0 else "down"
+                    badge = '<span class="badge" style="background:rgba(239,68,68,0.15);color:#ef4444;">⚠️ desvio</span>' if abs(dev) > 5 else '<span class="badge available">ok</span>'
+                    dev_txt = f"{dev:+.1f}%"
+                    act_txt = f"{actual:.2f} m/pc"
+                else:
+                    bar_width, bar_color, var_class, dev_txt = 50, "#3b82f6", "", "—"
+                    act_txt = "sem dados"
+                    badge = '<span class="badge" style="background:rgba(100,116,139,0.15);color:#64748b;">—</span>'
+                rows_html += f"""
+                <div class="consumo-row">
+                    <div class="consumo-model">{row['model_name']}</div>
+                    <div class="consumo-fabric">{row['fabric_ref']}</div>
+                    <div class="consumo-val">{expected:.2f} m/pc</div>
+                    <div class="consumo-bar-bg"><div class="consumo-bar-fill" style="width:{bar_width}%;background:{bar_color};"></div></div>
+                    <div class="consumo-val">{act_txt}</div>
+                    <div class="consumo-var {var_class}">{dev_txt}</div>
+                    {badge}
+                </div>"""
+            st.markdown(rows_html, unsafe_allow_html=True)
+
+    with tab_real:
+        cons_df = query_to_df("SELECT * FROM consumptions ORDER BY date_cut DESC, id DESC")
+        if not cons_df.empty:
+            clean = safe_display_df(cons_df)
+            clean.columns = ['ID', 'PO Garment', 'Modelo', 'Peças', 'Metros Esperados', 'Metros Reais', 'Desvio %', 'Data Corte', 'Confeccionador', 'Notas']
+            st.dataframe(clean, use_container_width=True, hide_index=True, height=400)
+            n_high = cons_df[cons_df['deviation_pct'].fillna(0).abs() > 5].shape[0]
+            if n_high:
+                st.warning(f"⚠️ {n_high} consumos com desvio > 5%")
+            download_pair(cons_df, f"consumos_{datetime.now().strftime('%Y%m%d')}", 'Consumos', 'cons_dl')
+        else:
+            st.info("Sem consumos registados.")
+
+    with tab_edit:
+        st.markdown('<div class="section-subtitle">edita diretamente o consumo standard (m/pc esperado) — alterações gravam ao clicar em Guardar</div>', unsafe_allow_html=True)
+        cm_edit = query_to_df("SELECT model_name, fabric_ref, m_per_pc_expected, m_per_pc_actual FROM consumption_map ORDER BY fabric_ref, model_name")
+        edited = st.data_editor(
+            cm_edit,
+            use_container_width=True,
+            hide_index=True,
+            num_rows="dynamic",
+            column_config={
+                "model_name": st.column_config.TextColumn("Modelo", required=True),
+                "fabric_ref": st.column_config.SelectboxColumn("Ref Tecido", options=[r[0] for r in FABRIC_REFS], required=True),
+                "m_per_pc_expected": st.column_config.NumberColumn("Esperado m/pc", min_value=0.0, step=0.01, format="%.2f", required=True),
+                "m_per_pc_actual": st.column_config.NumberColumn("Real Médio m/pc", min_value=0.0, step=0.01, format="%.3f"),
+            },
+            key="cm_editor"
+        )
+        if st.button("💾 Guardar mapa de consumos", key="cm_save"):
+            execute_sql("DELETE FROM consumption_map")
+            rows = [(r['model_name'], r['fabric_ref'], r['m_per_pc_expected'], r['m_per_pc_actual'])
+                    for _, r in edited.iterrows() if r['model_name'] and r['fabric_ref'] and r['m_per_pc_expected']]
+            execute_many("INSERT OR REPLACE INTO consumption_map VALUES (?,?,?,?)", rows)
+            st.success(f"✅ Mapa guardado — {len(rows)} modelos.")
+            st.rerun()
+
+
+# ===================== UI: MOVEMENT (3 MODOS) =====================
+def render_movement():
+    st.markdown('<div class="section-title">🚚 Movimentar Tecido</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-subtitle">3 modos: rolos conhecidos (tokens) · lote agregado (divisível) · metros consolidados (FIFO)</div>', unsafe_allow_html=True)
+
+    tab_rolls, tab_lot, tab_bulk, tab_recv, tab_inv = st.tabs([
+        "🎫 Rolos Conhecidos", "📦 Lote Agregado", "🔢 Metros Consolidados", "📥 Receção", "📄 Faturação PO"])
+
+    # ---------- MODO 1: ROLOS CONHECIDOS ----------
+    with tab_rolls:
+        st.markdown('<div class="section-subtitle">seleciona rolos individuais por token e move-os para outro local</div>', unsafe_allow_html=True)
+        c1, c2 = st.columns(2)
+        with c1:
+            ref_opts = query_to_df("SELECT DISTINCT ref_code FROM fabric_rolls WHERE status = 'AVAILABLE' ORDER BY ref_code")['ref_code'].tolist()
+            m1_ref = st.selectbox("Referência", ref_opts, key="m1_ref")
+        with c2:
+            wh_opts = query_to_df("SELECT DISTINCT warehouse FROM fabric_rolls WHERE ref_code = ? AND status = 'AVAILABLE'", (m1_ref,))['warehouse'].tolist()
+            m1_wh = st.selectbox("De (armazém atual)", wh_opts, key="m1_wh")
+
+        rolls_avail = query_to_df("SELECT token, metres, color FROM fabric_rolls WHERE ref_code = ? AND warehouse = ? AND status = 'AVAILABLE' ORDER BY token", (m1_ref, m1_wh))
+        if rolls_avail.empty:
+            st.info("Sem rolos disponíveis com estes filtros.")
+        else:
+            sel_tokens = st.multiselect(
+                "Rolos a mover",
+                rolls_avail['token'].tolist(),
+                format_func=lambda t: f"{t} — {rolls_avail[rolls_avail['token']==t].iloc[0]['metres']:.1f}m" +
+                                      (f" ({rolls_avail[rolls_avail['token']==t].iloc[0]['color']})" if rolls_avail[rolls_avail['token']==t].iloc[0]['color'] else ""),
+                key="m1_tokens")
+            total_sel = rolls_avail[rolls_avail['token'].isin(sel_tokens)]['metres'].sum()
+            st.markdown(f'<div class="section-subtitle">{len(sel_tokens)} rolos selecionados — total {total_sel:,.1f}m</div>', unsafe_allow_html=True)
+
+            c1, c2 = st.columns(2)
+            with c1:
+                m1_to = st.selectbox("Para", [l for l in ALL_LOCATIONS if l != m1_wh], key="m1_to")
+            with c2:
+                m1_status = st.selectbox("Estado no destino", ['AVAILABLE', 'IN_PROCESS'],
+                                         format_func=lambda s: 'AVAILABLE (armazém)' if s == 'AVAILABLE' else 'IN_PROCESS (confeccionador)',
+                                         key="m1_status")
+
+            if st.button("✓ Mover rolos selecionados", key="m1_go"):
+                if not sel_tokens:
+                    st.error("Seleciona pelo menos um rolo.")
+                else:
+                    for t in sel_tokens:
+                        execute_sql("UPDATE fabric_rolls SET warehouse = ?, status = ?, date_last_move = ? WHERE token = ?",
+                                    (m1_to, m1_status, datetime.now().isoformat(), t))
+                        m_val = rolls_avail[rolls_avail['token'] == t].iloc[0]['metres']
+                        log_movement('TRANSFER', t, m1_wh, m1_to, m1_ref, m_val, None, f'Rolo movido ({m1_status})')
+                    st.success(f"✅ {len(sel_tokens)} rolos ({total_sel:,.1f}m) movidos de {m1_wh} → {m1_to}")
+                    st.rerun()
+
+    # ---------- MODO 2: LOTE AGREGADO ----------
+    with tab_lot:
+        st.markdown('<div class="section-subtitle">lotes P- em confeccionadores — podes mover o total ou dividir (parcial)</div>', unsafe_allow_html=True)
+        lots = query_to_df("SELECT token, ref_code, metres, color, warehouse FROM fabric_rolls WHERE status = 'IN_PROCESS' ORDER BY warehouse, ref_code")
+        if lots.empty:
+            st.info("Sem lotes em processo.")
+        else:
+            lot_sel = st.selectbox("Lote agregado", lots['token'].tolist(), key="m2_lot",
+                                   format_func=lambda t: f"{t} — {lots[lots['token']==t].iloc[0]['metres']:,.1f}m @ {lots[lots['token']==t].iloc[0]['warehouse']}")
+            lot_row = lots[lots['token'] == lot_sel].iloc[0]
+
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                m2_metres = st.number_input("Metros a mover", min_value=0.0, max_value=float(lot_row['metres']),
+                                            value=float(lot_row['metres']), step=0.1, key="m2_metres")
+            with c2:
+                m2_to = st.selectbox("Para", [l for l in ALL_LOCATIONS if l != lot_row['warehouse']], key="m2_to")
+            with c3:
+                m2_status = st.selectbox("Estado no destino", ['AVAILABLE', 'IN_PROCESS'],
+                                         format_func=lambda s: 'AVAILABLE (armazém)' if s == 'AVAILABLE' else 'IN_PROCESS (confeccionador)',
+                                         key="m2_status")
+
+            partial = 0 < m2_metres < lot_row['metres']
+            if partial:
+                st.info(f"✂️ Divisão: o lote original fica com {lot_row['metres'] - m2_metres:,.1f}m e é criado um novo lote de {m2_metres:,.1f}m em {m2_to}")
+
+            if st.button("✓ Mover lote", key="m2_go"):
+                if m2_metres <= 0:
+                    st.error("Metros > 0 necessários.")
+                else:
+                    if partial:
+                        # Divide: reduz original, cria novo lote no destino
+                        execute_sql("UPDATE fabric_rolls SET metres = metres - ?, date_last_move = ? WHERE token = ?",
+                                    (m2_metres, datetime.now().isoformat(), lot_sel))
+                        new_tok = next_token('P', lot_row['ref_code'])
+                        execute_sql("INSERT INTO fabric_rolls VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                                    (new_tok, lot_row['ref_code'], m2_metres, None, lot_row['color'], m2_to, m2_status, None,
+                                     datetime.now().isoformat(), datetime.now().isoformat(), f'Dividido de {lot_sel}'))
+                        log_movement('SPLIT', new_tok, lot_row['warehouse'], m2_to, lot_row['ref_code'], m2_metres, None,
+                                     f'Divisão de {lot_sel} ({m2_metres:.1f}m)')
+                        st.success(f"✅ Lote dividido: {m2_metres:,.1f}m → {new_tok} em {m2_to}")
+                    else:
+                        execute_sql("UPDATE fabric_rolls SET warehouse = ?, status = ?, date_last_move = ? WHERE token = ?",
+                                    (m2_to, m2_status, datetime.now().isoformat(), lot_sel))
+                        log_movement('TRANSFER', lot_sel, lot_row['warehouse'], m2_to, lot_row['ref_code'], m2_metres, None, 'Lote movido total')
+                        st.success(f"✅ Lote {lot_sel} ({m2_metres:,.1f}m) movido → {m2_to}")
+                    st.rerun()
+
+    # ---------- MODO 3: METROS CONSOLIDADOS ----------
+    with tab_bulk:
+        st.markdown('<div class="section-subtitle">move X metros de uma referência/armazém — o sistema retira dos rolos disponíveis por ordem (FIFO) e cria lote no destino</div>', unsafe_allow_html=True)
+        c1, c2 = st.columns(2)
+        with c1:
+            m3_ref = st.selectbox("Referência", query_to_df("SELECT DISTINCT ref_code FROM fabric_rolls WHERE status = 'AVAILABLE' ORDER BY ref_code")['ref_code'].tolist(), key="m3_ref")
+        with c2:
+            m3_wh = st.selectbox("De (armazém)", query_to_df("SELECT DISTINCT warehouse FROM fabric_rolls WHERE ref_code = ? AND status = 'AVAILABLE'", (m3_ref,))['warehouse'].tolist(), key="m3_wh")
+
+        avail = query_to_df("SELECT COALESCE(SUM(metres),0) as m FROM fabric_rolls WHERE ref_code = ? AND warehouse = ? AND status = 'AVAILABLE'", (m3_ref, m3_wh)).iloc[0]['m']
+        st.markdown(f'<div class="section-subtitle">disponível em {m3_wh}: <strong style="color:#60a5fa">{avail:,.1f}m</strong></div>', unsafe_allow_html=True)
+
+        c1, c2 = st.columns(2)
+        with c1:
+            m3_metres = st.number_input("Metros a mover", min_value=0.0, max_value=float(avail), step=0.1, key="m3_metres")
+        with c2:
+            m3_to = st.selectbox("Para", [l for l in ALL_LOCATIONS if l != m3_wh], key="m3_to")
+
+        m3_po = st.text_input("PO garment (opcional — reserva)", key="m3_po")
+
+        if st.button("✓ Mover metros", key="m3_go"):
+            if m3_metres <= 0 or m3_metres > avail:
+                st.error(f"Metros inválidos (disponível: {avail:,.1f}m)")
+            else:
+                dest_status = 'IN_PROCESS' if m3_to in CONFECCIONADORES else 'AVAILABLE'
+                # Cria lote no destino
+                new_tok = next_token('P' if dest_status == 'IN_PROCESS' else 'R', m3_ref)
+                execute_sql("INSERT INTO fabric_rolls VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                            (new_tok, m3_ref, m3_metres, None, None, m3_to, dest_status, m3_po or None,
+                             datetime.now().isoformat(), datetime.now().isoformat(), f'Consolidado de {m3_wh}'))
+                # Retira FIFO dos rolos de origem
+                remaining = m3_metres
+                src = query_to_df("SELECT token, metres FROM fabric_rolls WHERE ref_code = ? AND warehouse = ? AND status = 'AVAILABLE' ORDER BY date_received, token", (m3_ref, m3_wh))
+                for _, r in src.iterrows():
+                    if remaining <= 0:
+                        break
+                    if r['metres'] <= remaining:
+                        execute_sql("UPDATE fabric_rolls SET metres = 0, status = 'INVOICED', notes = ?, date_last_move = ? WHERE token = ?",
+                                    (f'Consumido em {new_tok}', datetime.now().isoformat(), r['token']))
+                        remaining -= r['metres']
+                    else:
+                        execute_sql("UPDATE fabric_rolls SET metres = metres - ?, date_last_move = ? WHERE token = ?",
+                                    (remaining, datetime.now().isoformat(), r['token']))
+                        remaining = 0
+                log_movement('CONSOLIDATE', new_tok, m3_wh, m3_to, m3_ref, m3_metres, m3_po or None, f'{m3_metres:.1f}m consolidados (FIFO)')
+                st.success(f"✅ {m3_metres:,.1f}m movidos de {m3_wh} → {m3_to} como {new_tok}")
+                st.rerun()
+
+    # ---------- RECEÇÃO ----------
+    with tab_recv:
+        st.markdown("<div class='info-card'><div class='info-card-title'>📥 Receção de Novo Tecido</div><div class='info-card-text'>Ao receber tecido de fornecedor, o sistema gera token automático <strong>R-{REF}-{NNN}</strong>. Cada rolo tem token único, metros exatos, lote/cor e histórico completo.</div></div>", unsafe_allow_html=True)
+
+        refs = query_to_df("SELECT ref_code FROM fabric_refs ORDER BY ref_code")['ref_code'].tolist()
+        c1, c2, c3 = st.columns(3)
+        with c1:
             recv_ref = st.selectbox("Referência", refs, key="recv_ref")
-        with col2:
+        with c2:
             recv_metres = st.number_input("Metros recebidos", min_value=0.0, step=0.01, key="recv_metres")
-        with col3:
-            recv_wh = st.selectbox("Armazém destino", ['XBS', 'Riopele'], key="recv_wh")
+        with c3:
+            recv_wh = st.selectbox("Armazém destino", WAREHOUSES, key="recv_wh")
 
-        recv_lot = st.text_input("Lote (opcional)", placeholder="L2026-B", key="recv_lot")
+        c1, c2 = st.columns(2)
+        with c1:
+            recv_lot = st.text_input("Lote (opcional)", placeholder="L2026-B", key="recv_lot")
+        with c2:
+            recv_color = st.text_input("Cor (opcional)", placeholder="Dark Navy", key="recv_color")
 
         if st.button("✓ Receber e gerar token", key="confirm_recv"):
             if recv_metres > 0:
-                conn = sqlite3.connect(DB_PATH)
-                cursor = conn.cursor()
-                cursor.execute("SELECT COUNT(*) FROM fabric_rolls WHERE ref_code = ?", (recv_ref,))
-                count = cursor.fetchone()[0] + 1
-                token = f"R-{recv_ref.replace('/', '_')}-{count:03d}"
-                cursor.execute("INSERT INTO fabric_rolls VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                    (token, recv_ref, recv_metres, recv_lot or None, None, recv_wh, 'AVAILABLE', None,
-                     datetime.now().isoformat(), datetime.now().isoformat(), None))
-                conn.commit()
-                conn.close()
-                execute_sql("INSERT INTO movements (date_time, move_type, token, from_location, to_location, ref_code, metres, notes) VALUES (?,?,?,?,?,?,?,?)",
-                           (datetime.now().isoformat(), 'RECEIPT', token, 'Fornecedor', recv_wh, recv_ref, recv_metres, f'Receção lote {recv_lot}'))
-                st.success(f"Novo rolo criado: {token}")
+                token = next_token('R', recv_ref)
+                execute_sql("INSERT INTO fabric_rolls VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                            (token, recv_ref, recv_metres, recv_lot or None, recv_color or None, recv_wh, 'AVAILABLE', None,
+                             datetime.now().isoformat(), datetime.now().isoformat(), None))
+                log_movement('RECEIPT', token, 'Fornecedor', recv_wh, recv_ref, recv_metres, None, f'Receção lote {recv_lot}' if recv_lot else 'Receção')
+                st.success(f"✅ Novo rolo criado: {token} ({recv_metres:,.1f}m)")
                 st.rerun()
             else:
                 st.error("Metros deve ser > 0")
 
-    with move_tab3:
-        st.markdown("<div class='info-card'><div class='info-card-title'>📄 Faturação de PO Garment</div><div class='info-card-text'>Quando uma PO garment é faturada, os metros em processo são automaticamente removidos do stock e marcados como INVOICED.</div></div>", unsafe_allow_html=True)
+    # ---------- FATURAÇÃO ----------
+    with tab_inv:
+        st.markdown("<div class='info-card'><div class='info-card-title'>📄 Faturação de PO Garment</div><div class='info-card-text'>Quando uma PO garment é faturada, os metros em processo ligados a ela saem automaticamente do stock (INVOICED). As movimentações do mês têm de bater certo com a faturação.</div></div>", unsafe_allow_html=True)
 
-        invoice_po = st.text_input("PO garment a faturar", placeholder="POAPS200000xxxx", key="invoice_po")
-        if st.button("✓ Confirmar faturação", key="confirm_invoice"):
-            if invoice_po:
-                conn = sqlite3.connect(DB_PATH)
-                cursor = conn.cursor()
-                cursor.execute("SELECT SUM(metres) FROM fabric_rolls WHERE po_garment = ? AND status = 'IN_PROCESS'", (invoice_po,))
-                invoiced_metres = cursor.fetchone()[0] or 0
-                cursor.execute("UPDATE fabric_rolls SET status = 'INVOICED', notes = 'Faturado - sai de em processo' WHERE po_garment = ? AND status = 'IN_PROCESS'", (invoice_po,))
-                cursor.execute("UPDATE production SET status = 'INVOICED' WHERE po_number = ?", (invoice_po,))
-                conn.commit()
-                conn.close()
-                execute_sql("INSERT INTO movements (date_time, move_type, token, from_location, to_location, ref_code, metres, po_garment, notes) VALUES (?,?,?,?,?,?,?,?,?)",
-                           (datetime.now().isoformat(), 'INVOICE', 'INVOICED', 'Em Processo', 'Faturado', None, invoiced_metres, invoice_po, f'{invoiced_metres:.2f}m faturados'))
-                st.success(f"✅ PO {invoice_po} faturada. {invoiced_metres:.2f}m saíram de em processo.")
-                st.rerun()
+        pend_pos = query_to_df("SELECT po_number, model_name, confeccionador FROM production WHERE status != 'INVOICED' ORDER BY po_number DESC")
+        if pend_pos.empty:
+            st.info("Sem POs por faturar.")
+        else:
+            invoice_po = st.selectbox("PO garment a faturar", pend_pos['po_number'].tolist(), key="invoice_po",
+                                      format_func=lambda p: f"{p} — {pend_pos[pend_pos['po_number']==p].iloc[0]['model_name'][:45]}")
+            inv_m = query_to_df("SELECT COALESCE(SUM(metres),0) as m FROM fabric_rolls WHERE po_garment = ? AND status = 'IN_PROCESS'", (invoice_po,)).iloc[0]['m']
+            if inv_m > 0:
+                st.info(f"Metros em processo ligados a esta PO: {inv_m:,.1f}m")
             else:
-                st.error("Indique a PO garment")
+                st.warning("Sem metros em processo ligados por token — a faturação só muda o estado da PO.")
 
-    # Rules section
+            if st.button("✓ Confirmar faturação", key="confirm_invoice"):
+                execute_sql("UPDATE fabric_rolls SET status = 'INVOICED', notes = 'Faturado — saiu de em processo' WHERE po_garment = ? AND status = 'IN_PROCESS'", (invoice_po,))
+                execute_sql("UPDATE production SET status = 'INVOICED' WHERE po_number = ?", (invoice_po,))
+                log_movement('INVOICE', None, 'Em Processo', 'Faturado', None, inv_m, invoice_po, f'{inv_m:.1f}m faturados')
+                st.success(f"✅ PO {invoice_po} faturada. {inv_m:,.1f}m saíram de em processo.")
+                st.rerun()
+
+    # Regras
     st.markdown('<div class="section-title">Regras de Tokens</div>', unsafe_allow_html=True)
     col1, col2 = st.columns(2)
     with col1:
@@ -1271,61 +1456,46 @@ def render_movement():
         <div class="info-card">
             <div class="info-card-title">✅ Novos Rolos — Token Individual</div>
             <div class="info-card-text">
-                Receção de tecido → token automático gerado<br>
-                Formato: <span class="trace-token">R-{REF}-{NNN}</span><br>
-                Ex: <span class="trace-token">R-EP001-015</span><br><br>
-                Cada rolo tem:<br>
-                • token único<br>
-                • metros exatos<br>
-                • lote / cor<br>
-                • histórico completo
+                Receção de tecido → token automático<br>
+                Formato: <span class="trace-token">R-{REF}-{NNN}</span><br><br>
+                Cada rolo tem: token único · metros exatos · lote/cor · histórico completo
             </div>
         </div>
         """, unsafe_allow_html=True)
     with col2:
         st.markdown("""
         <div class="info-card">
-            <div class="info-card-title">⚠️ Confeccionadores — Metros Totais</div>
+            <div class="info-card-title">⚠️ Confeccionadores — Lotes Agregados</div>
             <div class="info-card-text">
-                Tecido já em confeccionador:<br>
-                • Aparece como <strong>IN_PROCESS</strong><br>
-                • Sem token individual<br>
-                • Nota: "em processo — confeccionador"<br><br>
-                Movimentação:<br>
-                • Só como total (não por rolo)<br>
-                • Só entre armazéns SNT/Riopele<br>
-                • Não fragmentável em confecionador
+                Tecido em confeccionador → <span class="trace-token">P-{CONF}-{REF}-{NNN}</span><br><br>
+                Metros totais sem lote original · <strong>divisível</strong> (modo Lote Agregado) · sai de em processo na faturação
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-    # History
-    st.markdown('<div class="section-title">Histórico de Movimentações — Últimas 10</div>', unsafe_allow_html=True)
-    hist_df = query_to_df("SELECT * FROM movements ORDER BY date_time DESC LIMIT 10")
+    # Histórico
+    st.markdown('<div class="section-title">Histórico de Movimentações — Últimas 20</div>', unsafe_allow_html=True)
+    hist_df = query_to_df("SELECT * FROM movements ORDER BY date_time DESC LIMIT 20")
     if not hist_df.empty:
-        hist_df = safe_display_df(hist_df)
-        hist_df.columns = ['ID', 'Data/Hora', 'Tipo', 'Token', 'De', 'Para', 'Ref', 'Metros', 'PO', 'Notas']
-        st.dataframe(hist_df, use_container_width=True, hide_index=True)
+        clean = safe_display_df(hist_df)
+        clean.columns = ['ID', 'Data/Hora', 'Tipo', 'Token', 'De', 'Para', 'Ref', 'Metros', 'PO', 'Notas']
+        st.dataframe(clean, use_container_width=True, hide_index=True)
     else:
         st.info("Sem movimentações registadas.")
 
 
-# ===================== UI: TRACE (PRO) =====================
+# ===================== UI: TRACE =====================
 def render_trace():
     st.markdown('<div class="section-title">🔍 Rastreio</div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-subtitle">Histórico de cada rolo desde entrada até faturação. Procura por token, PO garment, lote ou referência.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-subtitle">histórico de cada rolo/lote desde entrada até faturação — procura por token, PO garment, lote ou referência</div>', unsafe_allow_html=True)
 
-    search = st.text_input("🔍 Procurar por token, PO garment, lote, ou referência...", placeholder="ex: R-EP001-003 ou POAPS2000004404", key="trace_search")
+    search = st.text_input("🔍 Procurar...", placeholder="ex: R-TCB258_EC1-001 · P-Samidel-GB14W-001 · POAPS2000004404", key="trace_search")
 
     if search:
-        # Search by token
         token_df = query_to_df("SELECT * FROM fabric_rolls WHERE token = ?", (search,))
         if not token_df.empty:
             row = token_df.iloc[0]
-            status_badge = {
-                'AVAILABLE': 'available', 'RESERVED': 'reserved',
-                'IN_PROCESS': 'inprocess', 'INVOICED': 'invoiced'
-            }.get(row['status'], '')
+            status_badge = {'AVAILABLE': 'available', 'RESERVED': 'reserved', 'IN_PROCESS': 'inprocess', 'INVOICED': 'invoiced'}.get(row['status'], '')
 
             st.markdown(f"""
             <div class="trace-card">
@@ -1338,10 +1508,10 @@ def render_trace():
                     <div><div class="trace-detail-label">Metros</div><div class="trace-detail-value">{row['metres']:.2f}m</div></div>
                     <div><div class="trace-detail-label">Lote</div><div class="trace-detail-value">{row['lot'] or '—'}</div></div>
                     <div><div class="trace-detail-label">Cor</div><div class="trace-detail-value">{row['color'] or '—'}</div></div>
-                    <div><div class="trace-detail-label">Armazém</div><div class="trace-detail-value">{row['warehouse']}</div></div>
+                    <div><div class="trace-detail-label">Local</div><div class="trace-detail-value">{row['warehouse']}</div></div>
                     <div><div class="trace-detail-label">PO Garment</div><div class="trace-detail-value">{row['po_garment'] or '—'}</div></div>
-                    <div><div class="trace-detail-label">Recebido</div><div class="trace-detail-value">{row['date_received'][:10] if row['date_received'] else '—'}</div></div>
-                    <div><div class="trace-detail-label">Último Mov.</div><div class="trace-detail-value">{row['date_last_move'][:10] if row['date_last_move'] else '—'}</div></div>
+                    <div><div class="trace-detail-label">Recebido</div><div class="trace-detail-value">{str(row['date_received'])[:10] if row['date_received'] else '—'}</div></div>
+                    <div><div class="trace-detail-label">Último Mov.</div><div class="trace-detail-value">{str(row['date_last_move'])[:10] if row['date_last_move'] else '—'}</div></div>
                 </div>
                 {f'<div style="margin-top:12px;padding:10px;border-radius:8px;background:rgba(245,158,11,0.1);color:#f59e0b;font-size:12px;">📝 {row["notes"]}</div>' if row['notes'] else ''}
             </div>
@@ -1350,34 +1520,35 @@ def render_trace():
             hist_df = query_to_df("SELECT * FROM movements WHERE token = ? OR po_garment = ? ORDER BY date_time DESC", (search, search))
             if not hist_df.empty:
                 st.markdown('<div class="section-title">Histórico de Movimentações</div>', unsafe_allow_html=True)
-                hist_df = safe_display_df(hist_df)
-                st.dataframe(hist_df, use_container_width=True, hide_index=True, height=250)
+                st.dataframe(safe_display_df(hist_df), use_container_width=True, hide_index=True, height=250)
         else:
-            # Search by PO
             po_df = query_to_df("SELECT * FROM production WHERE po_number = ?", (search,))
             if not po_df.empty:
                 st.markdown(f'<div class="section-title">PO: {search}</div>', unsafe_allow_html=True)
-                po_df = safe_display_df(po_df)
-                st.dataframe(po_df, use_container_width=True, hide_index=True)
+                st.dataframe(safe_display_df(po_df), use_container_width=True, hide_index=True)
 
                 cons_df = query_to_df("SELECT * FROM consumptions WHERE po_garment = ?", (search,))
                 if not cons_df.empty:
                     st.markdown('<div class="section-title">Consumos Registados</div>', unsafe_allow_html=True)
-                    cons_df = safe_display_df(cons_df)
-                    st.dataframe(cons_df, use_container_width=True, hide_index=True)
+                    st.dataframe(safe_display_df(cons_df), use_container_width=True, hide_index=True)
 
                 roll_df = query_to_df("SELECT * FROM fabric_rolls WHERE po_garment = ?", (search,))
                 if not roll_df.empty:
-                    st.markdown('<div class="section-title">Rolos Alocados</div>', unsafe_allow_html=True)
-                    roll_df = safe_display_df(roll_df)
-                    st.dataframe(roll_df, use_container_width=True, hide_index=True)
-            else:
-                st.warning("Nenhum resultado encontrado. Tente outro token, PO ou referência.")
+                    st.markdown('<div class="section-title">Rolos/Lotes Alocados</div>', unsafe_allow_html=True)
+                    st.dataframe(safe_display_df(roll_df), use_container_width=True, hide_index=True)
 
-# ===================== UI: EXPORT (PRO) =====================
+                mov_df = query_to_df("SELECT * FROM movements WHERE po_garment = ? ORDER BY date_time DESC", (search,))
+                if not mov_df.empty:
+                    st.markdown('<div class="section-title">Movimentações</div>', unsafe_allow_html=True)
+                    st.dataframe(safe_display_df(mov_df), use_container_width=True, hide_index=True)
+            else:
+                st.warning("Nenhum resultado encontrado. Tenta outro token, PO ou referência.")
+
+
+# ===================== UI: EXPORT =====================
 def render_export():
     st.markdown('<div class="section-title">📤 Exportar</div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-subtitle">Relatórios Excel para financeiros e operacionais</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-subtitle">extratos Excel e CSV para colegas de planeamento e financeiros</div>', unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns(3)
 
@@ -1386,47 +1557,41 @@ def render_export():
         <div class="info-card" style="text-align:center;">
             <div style="font-size:32px;margin-bottom:8px;">📊</div>
             <div class="info-card-title">Stock Resumido</div>
-            <div class="info-card-text">Posição por referência com planeamento</div>
+            <div class="info-card-text">posição por referência + cor, com planeamento</div>
         </div>
         """, unsafe_allow_html=True)
-        if st.button("Exportar Resumido", key="exp_summary"):
-            excel = export_stock_summary()
-            st.download_button("⬇️ Download", excel, f"stock_resumido_{datetime.now().strftime('%Y%m%d')}.xlsx", 
-                             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        df = get_stock_position()
+        download_pair(df, f"stock_resumido_{datetime.now().strftime('%Y%m%d')}", 'Stock Resumido', 'exp_sum')
 
     with col2:
         st.markdown("""
         <div class="info-card" style="text-align:center;">
             <div style="font-size:32px;margin-bottom:8px;">📋</div>
             <div class="info-card-title">Stock Detalhado</div>
-            <div class="info-card-text">Todos os rolos com tokens e histórico</div>
+            <div class="info-card-text">todos os rolos e lotes com tokens</div>
         </div>
         """, unsafe_allow_html=True)
-        if st.button("Exportar Detalhado", key="exp_detail"):
-            excel = export_stock_detailed()
-            st.download_button("⬇️ Download", excel, f"stock_detalhado_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        df2 = query_to_df("SELECT token, ref_code, metres, color, lot, warehouse, status, po_garment, date_last_move, notes FROM fabric_rolls WHERE status != 'INVOICED' ORDER BY ref_code, token")
+        download_pair(df2, f"stock_detalhado_{datetime.now().strftime('%Y%m%d')}", 'Stock Detalhado', 'exp_det')
 
     with col3:
         st.markdown("""
         <div class="info-card" style="text-align:center;">
             <div style="font-size:32px;margin-bottom:8px;">📈</div>
-            <div class="info-card-title">Consumos</div>
-            <div class="info-card-text">Histórico de cortes com desvios</div>
+            <div class="info-card-title">Consumos & Movimentos</div>
+            <div class="info-card-text">cortes com desvios + movimentações do mês (bater com faturação)</div>
         </div>
         """, unsafe_allow_html=True)
-        if st.button("Exportar Consumos", key="exp_cons"):
-            cons_df = query_to_df("SELECT * FROM consumptions ORDER BY date_cut DESC")
-            output = BytesIO()
-            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                cons_df.to_excel(writer, sheet_name='Consumos', index=False)
-            output.seek(0)
-            st.download_button("⬇️ Download", output, f"consumos_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        df3 = query_to_df("SELECT * FROM consumptions ORDER BY date_cut DESC")
+        download_pair(df3, f"consumos_{datetime.now().strftime('%Y%m%d')}", 'Consumos', 'exp_cons')
+        df4 = query_to_df("SELECT * FROM movements WHERE date_time >= ? ORDER BY date_time DESC",
+                          ((datetime.now().replace(day=1)).isoformat(),))
+        st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
+        download_pair(df4, f"movimentos_mes_{datetime.now().strftime('%Y%m')}", 'Movimentos', 'exp_mov')
+
 
 # ===================== MAIN =====================
 def main():
-    # Sidebar
     st.sidebar.markdown("""
     <div style="padding:16px 0 24px 0;text-align:center;border-bottom:1px solid rgba(255,255,255,0.06);margin-bottom:16px;">
         <div style="font-size:28px;margin-bottom:4px;">🏭</div>
@@ -1451,14 +1616,14 @@ def main():
 
     selection = st.sidebar.radio("Navegar", list(tabs.keys()), label_visibility="collapsed")
 
-    st.sidebar.markdown("""
+    st.sidebar.markdown(f"""
     <div style="position:fixed;bottom:20px;left:20px;right:20px;">
         <div style="border-top:1px solid rgba(255,255,255,0.06);padding-top:12px;color:#64748b;font-size:11px;text-align:center;">
-            v3.2 | Dados: CW29 2026<br>{}<br>
+            v3.3 | Dados: CW29 2026<br>{datetime.now().strftime('%Y-%m-%d')}<br>
             <span style="color:#3b82f6;font-weight:600;">SNT CMT</span>
         </div>
     </div>
-    """.format(datetime.now().strftime('%Y-%m-%d')), unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
     tabs[selection]()
 
