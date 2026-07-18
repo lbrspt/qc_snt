@@ -143,7 +143,6 @@ def init_db():
     conn.commit()
     conn.close()
 
-@st.cache_data(ttl=60)
 def get_db_connection():
     return sqlite3.connect(DB_PATH, check_same_thread=False)
 
