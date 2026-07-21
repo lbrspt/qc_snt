@@ -1,7 +1,16 @@
-# SNT CMT — Sistema de Stock & Produção v3.4
+# SNT CMT — Sistema de Stock & Produção v3.4.1
 
 Sistema de gestão de stock de tecidos, encomendas garment e consumos para a SNT.
 Dados reais carregados: CW29 2026.
+
+## v3.4.1 — Atribuir Cor em Massa
+
+| Novidade | Detalhe |
+|---|---|
+| **🎨 Atribuir / corrigir cor** (menu 📦 Stock) | Ferramenta para atribuir cor em massa aos rolos da XBS (que vieram do stock sem cor): filtra por ref/armazém, vê só os rolos sem cor, seleciona ou aplica a TODOS os listados, escolhe cor existente ou nova |
+| **Alerta de rolos sem cor** | Chip amarelo no Stock mostra quantos rolos faltam colorir até a estrutura ref + cor estar completa |
+
+Os lotes de confeccionadores (Samidel, Costa Correia…) já têm cor — esta ferramenta serve para os rolos físicos da XBS e qualquer rolo futuro.
 
 ## Novidades v3.4
 
@@ -47,7 +56,7 @@ O volume `qc_snt-volume` já está ligado com mount path `/app/data` — nada a 
 # 1. Substituir os ficheiros na pasta local do projeto
 # 2. Commit + push
 git add .
-git commit -m "v3.4 - Sistema de cor, producao editavel, sem SEWING"
+git commit -m "v3.4.1 - Atribuir cor em massa aos rolos XBS"
 git push origin main
 # 3. Railway faz deploy automático (1-2 min)
 ```

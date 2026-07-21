@@ -1,5 +1,5 @@
 """
-SNT CMT - Sistema de Stock & Produção v3.4
+SNT CMT - Sistema de Stock & Produção v3.4.1
 Dados reais CW29 2026
 v3.4:
 - Sistema de cor: cor sempre ligada à referência com ponto de cor visual em todo o site
@@ -867,7 +867,7 @@ def render_dashboard():
         <div style="display:flex;justify-content:space-between;align-items:center;">
             <div>
                 <h1>🏭 SNT CMT</h1>
-                <p>Sistema de Stock & Produção v3.4 | CW29 2026</p>
+                <p>Sistema de Stock & Produção v3.4.1 | CW29 2026</p>
             </div>
             <div class="live-badge"><span class="live-dot"></span> LIVE</div>
         </div>
@@ -1020,6 +1020,69 @@ def render_stock():
         clean_df.columns = ['Fornecedor', 'Ref', 'Cor', 'Metros', 'Lote', 'Armazém', 'Status', 'PO Garment', 'Notas', 'Token']
         clean_df = apply_color_badges(clean_df, 'Cor')
         st.dataframe(clean_df, use_container_width=True, hide_index=True, height=500)
+
+        # --- Atribuir / corrigir cor de rolos ---
+        n_sem_cor = query_to_df("SELECT COUNT(*) as c FROM fabric_rolls WHERE (color IS NULL OR color = '') AND status != 'INVOICED'").iloc[0]['c']
+        if n_sem_cor > 0:
+            st.markdown(f'<div class="alert-bar"><div class="alert-chip warning"><span class="alert-dot"></span>⚠️ {n_sem_cor} rolos/lotes sem cor atribuída — corrige abaixo para teres a estrutura ref + cor completa</div></div>', unsafe_allow_html=True)
+
+        with st.expander("🎨 Atribuir / corrigir cor de rolos", expanded=(n_sem_cor > 0)):
+            st.markdown('<div class="section-subtitle">atribui cor em massa: filtra por ref/armazém, seleciona rolos (ou aplica a todos os listados) e escolhe a cor</div>', unsafe_allow_html=True)
+
+            c1, c2 = st.columns(2)
+            with c1:
+                ac_refs = query_to_df("SELECT DISTINCT ref_code FROM fabric_rolls WHERE status != 'INVOICED' ORDER BY ref_code")['ref_code'].tolist()
+                ac_ref = st.selectbox("Referência", ac_refs, key="ac_ref")
+            with c2:
+                ac_whs = query_to_df("SELECT DISTINCT warehouse FROM fabric_rolls WHERE ref_code = ? AND status != 'INVOICED'", (ac_ref,))['warehouse'].tolist()
+                ac_wh = st.selectbox("Armazém", ['Todos'] + ac_whs, key="ac_wh")
+
+            ac_q = "SELECT token, metres, color, warehouse FROM fabric_rolls WHERE ref_code = ? AND status != 'INVOICED'"
+            ac_p = [ac_ref]
+            if ac_wh != 'Todos':
+                ac_q += " AND warehouse = ?"
+                ac_p.append(ac_wh)
+            ac_only = st.checkbox("Mostrar só rolos sem cor", value=True, key="ac_only")
+            if ac_only:
+                ac_q += " AND (color IS NULL OR color = '')"
+            ac_q += " ORDER BY token"
+            ac_rolls = query_to_df(ac_q, ac_p)
+
+            if ac_rolls.empty:
+                st.success("✅ Sem rolos por colorir com estes filtros.")
+            else:
+                ac_sel = st.multiselect(
+                    f"Rolos ({len(ac_rolls)} listados)",
+                    ac_rolls['token'].tolist(),
+                    format_func=lambda t: f"{color_dot(ac_rolls[ac_rolls['token']==t].iloc[0]['color'])} "
+                                          f"{ac_rolls[ac_rolls['token']==t].iloc[0]['color'] or 's/cor'}"
+                                          f" · {ac_rolls[ac_rolls['token']==t].iloc[0]['metres']:.1f}m"
+                                          f" @ {ac_rolls[ac_rolls['token']==t].iloc[0]['warehouse']} — {t}",
+                    key="ac_tokens")
+                apply_all = st.checkbox(f"Aplicar a TODOS os {len(ac_rolls)} rolos listados", key="ac_all")
+
+                ac_colors = query_to_df("SELECT DISTINCT color FROM fabric_rolls WHERE ref_code = ? AND color IS NOT NULL AND color != '' ORDER BY color", (ac_ref,))['color'].tolist()
+                ac_color_sel = st.selectbox("Cor a aplicar", ac_colors + ['➕ Nova cor…'],
+                                            format_func=lambda c: color_badge(c) if c != '➕ Nova cor…' else c,
+                                            key="ac_color_sel")
+                if ac_color_sel == '➕ Nova cor…':
+                    ac_color = st.text_input("Escreve a nova cor", placeholder="Dark Navy", key="ac_color_new")
+                else:
+                    ac_color = ac_color_sel
+
+                if st.button("✓ Aplicar cor", key="ac_apply"):
+                    targets = ac_rolls['token'].tolist() if apply_all else ac_sel
+                    if not targets:
+                        st.error("Seleciona rolos ou ativa 'Aplicar a TODOS'.")
+                    elif not ac_color or not str(ac_color).strip():
+                        st.error("Escolhe ou escreve uma cor.")
+                    else:
+                        ac_color = str(ac_color).strip()
+                        execute_many("UPDATE fabric_rolls SET color = ? WHERE token = ?", [(ac_color, t) for t in targets])
+                        log_movement('EDIT', None, ac_wh if ac_wh != 'Todos' else None, None, ac_ref, None, None,
+                                     f'Cor atribuída → {ac_color} ({len(targets)} rolos)', ac_color)
+                        st.success(f"✅ {color_badge(ac_color)} aplicada a {len(targets)} rolos de {ac_ref}.")
+                        st.rerun()
 
         st.markdown('<div class="section-title">Exportar seleção atual</div>', unsafe_allow_html=True)
         download_pair(rolls_df, f"stock_{datetime.now().strftime('%Y%m%d')}", 'Stock', 'stock_sel')
@@ -1773,7 +1836,7 @@ def main():
     st.sidebar.markdown(f"""
     <div style="position:fixed;bottom:20px;left:20px;right:20px;">
         <div style="border-top:1px solid rgba(255,255,255,0.06);padding-top:12px;color:#64748b;font-size:11px;text-align:center;">
-            v3.4 | Dados: CW29 2026<br>{datetime.now().strftime('%Y-%m-%d')}<br>
+            v3.4.1 | Dados: CW29 2026<br>{datetime.now().strftime('%Y-%m-%d')}<br>
             <span style="color:#3b82f6;font-weight:600;">SNT CMT</span>
         </div>
     </div>
