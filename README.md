@@ -1,7 +1,34 @@
-# SNT CMT — Sistema de Stock & Produção v3.4.1
+# SNT CMT — Sistema de Stock & Produção v3.5
 
 Sistema de gestão de stock de tecidos, encomendas garment e consumos para a SNT.
 Dados reais carregados: CW29 2026.
+
+## v3.5 — Stock XBS completo com cores (novo ponto de partida)
+
+| O que mudou | Detalhe |
+|---|---|
+| **Stock XBS completo** | 319 rolos importados do STOCK XBS (antes: 92 e incompleto) — **15.245,86m** |
+| **Cor em todos os rolos** | Cada rolo tem ref + cor oficial: TCB258/EC1 (Black 017, Midnight Blue 0917, Dark Grey 0318, Beige 0862), TCD648/F1 (Navy 004, Dark Grey 018, Black 001, Sand 002, Green 003), 43793 (Sand 2952, Black 344), GZIC GR4 (Dark Navy B5T01) |
+| **Totais validados** | Metros por ref+cor batem certo ao cêntimo com o Excel |
+| **Devoluções identificadas** | 144 rolos marcados com nota "Devolvido pela Samidel" (os RETIRADO DA SAMIDEL do ficheiro) |
+| **Refs novas com stock real** | TCD648/F1 passa de 0m → 7.732m disponíveis; 43793 de 0m → 981m; GZIC GR4 de 203m → 1.515m |
+
+⚠️ **Ponto de partida novo**: a v3.5 usa uma base nova (`snt_cmt_v35.db`). O que foi lançado manualmente nas versões anteriores fica guardado no ficheiro antigo (backup no volume), mas não é migrado — é o reset combinado para começar com dados certos.
+
+| Ref | Cor | Rolos | Metros |
+|---|---|---|---|
+| TCB258/EC1 | Black 017 | 33 | 1.614,99 |
+| TCB258/EC1 | Midnight Blue 0917 | 57 | 2.612,06 |
+| TCB258/EC1 | Dark Grey 0318 | 11 | 555,35 |
+| TCB258/EC1 | Beige 0862 | 4 | 234,80 |
+| TCD648/F1 | Navy 004 | 56 | 2.317,72 |
+| TCD648/F1 | Dark Grey 018 | 57 | 2.481,24 |
+| TCD648/F1 | Black 001 | 58 | 2.362,44 |
+| TCD648/F1 | Green 003 | 7 | 338,64 |
+| TCD648/F1 | Sand 002 | 7 | 232,02 |
+| 43793 | Sand 2952 | 5 | 318,40 |
+| 43793 | Black 344 | 10 | 662,90 |
+| GZIC GR4 | Dark Navy B5T01 | 14 | 1.515,30 |
 
 ## v3.4.1 — Atribuir Cor em Massa
 
@@ -56,7 +83,7 @@ O volume `qc_snt-volume` já está ligado com mount path `/app/data` — nada a 
 # 1. Substituir os ficheiros na pasta local do projeto
 # 2. Commit + push
 git add .
-git commit -m "v3.4.1 - Atribuir cor em massa aos rolos XBS"
+git commit -m "v3.5 - Stock XBS completo com cores (319 rolos)"
 git push origin main
 # 3. Railway faz deploy automático (1-2 min)
 ```
