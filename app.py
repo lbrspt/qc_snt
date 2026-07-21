@@ -1,12 +1,15 @@
 """
-SNT CMT - Sistema de Stock & Produção v3.3
+SNT CMT - Sistema de Stock & Produção v3.4
 Dados reais CW29 2026
-Novidades v3.3:
-- Modo LIVE na Produção: lançar consumo de corte em tempo real com validação de desvios
-- Movimentação em 3 modos: rolos conhecidos, lote agregado (divisível), metros consolidados
-- Edição live: mapa de consumos e pontos de reposição editáveis na grelha
-- Exportação Excel + CSV
-- Dados corrigidos: linhas TOTAL removidas, refs em processo normalizadas (ref + cor)
+v3.4:
+- Sistema de cor: cor sempre ligada à referência com ponto de cor visual em todo o site
+- Token sempre na última posição (tabelas, seleções de lotes e rolos)
+- Produção: tabela dinâmica editável; estado SEWING removido (PENDING → CUTTING → INVOICED)
+- Receção: picker de cor existente ou nova cor
+- Movimentos registam cor (migração automática, sem perda de dados)
+v3.3:
+- Modo LIVE na Produção com validação de desvios | Movimentação em 3 modos
+- Edição live do mapa de consumos | Exportação Excel + CSV | Dados corrigidos
 """
 
 import streamlit as st
@@ -255,10 +258,10 @@ def execute_many(query, params_list):
     conn.commit()
     conn.close()
 
-def log_movement(move_type, token, from_loc, to_loc, ref_code, metres, po_garment=None, notes=None):
+def log_movement(move_type, token, from_loc, to_loc, ref_code, metres, po_garment=None, notes=None, color=None):
     execute_sql(
-        "INSERT INTO movements (date_time, move_type, token, from_location, to_location, ref_code, metres, po_garment, notes) VALUES (?,?,?,?,?,?,?,?,?)",
-        (datetime.now().isoformat(), move_type, token, from_loc, to_loc, ref_code, metres, po_garment, notes))
+        "INSERT INTO movements (date_time, move_type, token, from_location, to_location, ref_code, color, metres, po_garment, notes) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        (datetime.now().isoformat(), move_type, token, from_loc, to_loc, ref_code, color, metres, po_garment, notes))
 
 def next_token(prefix, ref_code):
     """Gera próximo token sequencial para um prefixo+ref."""
@@ -278,8 +281,48 @@ WAREHOUSES = ['XBS', 'Riopele']
 CONFECCIONADORES = ['Samidel', 'Costa Correia', 'Tyrrell', 'Acorfato', 'Fabrijeans',
                     'Fabrijeans / Costa C', 'António & Carla', 'Denimworks', 'Vermis']
 ALL_LOCATIONS = WAREHOUSES + CONFECCIONADORES + ['Fornecedor', 'Cliente']
-PROD_STATUSES = ['PENDING', 'CUTTING', 'SEWING', 'INVOICED']
+PROD_STATUSES = ['PENDING', 'CUTTING', 'INVOICED']
 ROLL_STATUSES = ['AVAILABLE', 'RESERVED', 'IN_PROCESS', 'INVOICED']
+
+# ===================== SISTEMA DE COR =====================
+# A cor anda sempre ligada à referência: representação visual consistente em todo o site
+import hashlib as _hashlib
+
+COLOR_KEYWORDS = [
+    (('navy', 'midnight', 'blue nights', 'blue', 'azul'), '🔵'),
+    (('black', 'preto', 'noir'), '⚫'),
+    (('grey', 'gray', 'flint', 'pepper', 'steel', 'cinza', 'melange'), '🔘'),
+    (('green', 'pine', 'evergreen', 'verde', 'khaki', 'olive'), '🟢'),
+    (('brown', 'mocha', 'cognac', 'espresso', 'walnut', 'camel', 'castanho'), '🟤'),
+    (('beige', 'sand', 'vanilla', 'almond', 'sahara', 'cream', 'areia'), '🟡'),
+    (('berry', 'purple', 'violet', 'lilac', 'roxo'), '🟣'),
+    (('red', 'wine', 'bordeaux', 'vermelho', 'cherry'), '🔴'),
+    (('orange', 'rust', 'terracota', 'laranja'), '🟠'),
+]
+COLOR_PALETTE = ['🔵', '🟢', '🟤', '🟣', '🟠', '🔴', '🟡']
+
+def color_dot(color):
+    """Ponto de cor estável para uma cor de tecido."""
+    if not color or str(color).strip() in ('', 'None'):
+        return '⚪'
+    c = str(color).lower()
+    for keys, dot in COLOR_KEYWORDS:
+        if any(k in c for k in keys):
+            return dot
+    h = int(_hashlib.md5(c.encode()).hexdigest(), 16)
+    return COLOR_PALETTE[h % len(COLOR_PALETTE)]
+
+def color_badge(color):
+    """'🔵 Dark Navy' — para colunas Cor nas tabelas."""
+    if not color or str(color).strip() in ('', 'None'):
+        return ''
+    return f"{color_dot(color)} {color}"
+
+def apply_color_badges(df, col='Cor'):
+    """Aplica badges de cor a uma coluna de um DataFrame de display."""
+    if col in df.columns:
+        df[col] = df[col].apply(color_badge)
+    return df
 
 
 # ===================== SEED DATA (CW29 2026, corrigido v3.3) =====================
@@ -670,11 +713,18 @@ def init_db():
         from_location TEXT,
         to_location TEXT,
         ref_code TEXT,
+        color TEXT,
         metres REAL,
         po_garment TEXT,
         notes TEXT
     );
     """)
+
+    # Migração: adiciona coluna color a bases antigas (sem perder dados)
+    cursor.execute("PRAGMA table_info(movements)")
+    existing_cols = [r[1] for r in cursor.fetchall()]
+    if 'color' not in existing_cols:
+        cursor.execute("ALTER TABLE movements ADD COLUMN color TEXT")
 
     cursor.execute("SELECT COUNT(*) FROM fabric_refs")
     if cursor.fetchone()[0] == 0:
@@ -745,11 +795,18 @@ def get_stock_position():
     stock_df = query_to_df(query)
 
     incoming_df = query_to_df("SELECT ref_code, COALESCE(SUM(total_metres), 0) as a_chegar FROM incoming_fabric WHERE status IN ('EXPECTED', 'IN_TRANSIT') GROUP BY ref_code")
-    necessity_df = query_to_df("SELECT fabric_ref, COALESCE(SUM(metres_expected), 0) as necessidade FROM production WHERE status IN ('PENDING', 'CUTTING', 'SEWING') GROUP BY fabric_ref")
+    necessity_df = query_to_df("SELECT fabric_ref, COALESCE(SUM(metres_expected), 0) as necessidade FROM production WHERE status IN ('PENDING', 'CUTTING') GROUP BY fabric_ref")
+    cores_df = query_to_df("""
+        SELECT ref_code, GROUP_CONCAT(DISTINCT color) as cores
+        FROM fabric_rolls WHERE status != 'INVOICED' AND color IS NOT NULL AND color != ''
+        GROUP BY ref_code
+    """)
 
     result = stock_df.merge(incoming_df, on='ref_code', how='left')
     result = result.merge(necessity_df, left_on='ref_code', right_on='fabric_ref', how='left')
     result = result.drop(columns=['fabric_ref'], errors='ignore')
+    result = result.merge(cores_df, on='ref_code', how='left')
+    result['cores'] = result['cores'].fillna('')
     result = result.fillna(0)
 
     result['stock_liquido'] = result['disponivel'] + result['em_processo']
@@ -810,7 +867,7 @@ def render_dashboard():
         <div style="display:flex;justify-content:space-between;align-items:center;">
             <div>
                 <h1>🏭 SNT CMT</h1>
-                <p>Sistema de Stock & Produção v3.3.1 | CW29 2026</p>
+                <p>Sistema de Stock & Produção v3.4 | CW29 2026</p>
             </div>
             <div class="live-badge"><span class="live-dot"></span> LIVE</div>
         </div>
@@ -871,9 +928,18 @@ def render_dashboard():
         st.markdown('<div class="section-title">Posição de Stock por Referência de Tecido</div>', unsafe_allow_html=True)
         st.markdown('<div class="section-subtitle">stock líquido = disponível + em processo | planeamento = líquido + a chegar − necessidade</div>', unsafe_allow_html=True)
 
-        display_df = stock_df[['supplier', 'ref_code', 'description', 'disponivel', 'em_processo', 'stock_liquido', 'a_chegar', 'necessidade', 'planeamento', 'status']].copy()
+        display_df = stock_df[['supplier', 'ref_code', 'description', 'cores', 'disponivel', 'em_processo', 'stock_liquido', 'a_chegar', 'necessidade', 'planeamento', 'status']].copy()
+
+        def _cores_short(s):
+            if not s:
+                return ''
+            parts = [p.strip() for p in str(s).split(',') if p.strip()]
+            shown = ' '.join(color_dot(p) + p for p in parts[:3])
+            return shown + (f" +{len(parts) - 3}" if len(parts) > 3 else '')
+
+        display_df['cores'] = display_df['cores'].apply(_cores_short)
         display_df = safe_display_df(display_df)
-        display_df.columns = ['Fornecedor', 'Ref', 'Descrição', 'Disponível', 'Em Processo', 'Stock Líquido', 'A Chegar', 'Necessidade', 'Planeamento', 'Status']
+        display_df.columns = ['Fornecedor', 'Ref', 'Descrição', 'Cores', 'Disponível', 'Em Processo', 'Stock Líquido', 'A Chegar', 'Necessidade', 'Planeamento', 'Status']
         st.dataframe(display_df, use_container_width=True, hide_index=True, height=400)
 
         # Pipeline
@@ -952,6 +1018,7 @@ def render_stock():
         rolls_df = query_to_df(query, params)
         clean_df = safe_display_df(rolls_df)
         clean_df.columns = ['Fornecedor', 'Ref', 'Cor', 'Metros', 'Lote', 'Armazém', 'Status', 'PO Garment', 'Notas', 'Token']
+        clean_df = apply_color_badges(clean_df, 'Cor')
         st.dataframe(clean_df, use_container_width=True, hide_index=True, height=500)
 
         st.markdown('<div class="section-title">Exportar seleção atual</div>', unsafe_allow_html=True)
@@ -1014,13 +1081,13 @@ def render_production():
     st.markdown('<div class="section-title">👕 Produção</div>', unsafe_allow_html=True)
     st.markdown('<div class="section-subtitle">modo live: lança consumos de corte, valida desvios e muda estados — tudo por dropdown</div>', unsafe_allow_html=True)
 
-    tab_live, tab_list, tab_status = st.tabs(["⚡ Modo Live — Registar Corte", "📋 POs Ativas", "🔄 Mudar Estado PO"])
+    tab_live, tab_list, tab_status = st.tabs(["⚡ Modo Live — Registar Corte", "✏️ Tabela Editável", "🔄 Mudar Estado PO"])
 
     # ---------- TAB LIVE ----------
     with tab_live:
         active_pos = query_to_df("""
             SELECT po_number, model_name, confeccionador, po_qty, fabric_ref, metres_expected, status
-            FROM production WHERE status IN ('PENDING', 'CUTTING', 'SEWING') ORDER BY po_number DESC
+            FROM production WHERE status IN ('PENDING', 'CUTTING') ORDER BY po_number DESC
         """)
 
         if active_pos.empty:
@@ -1125,23 +1192,76 @@ def render_production():
                                (f" | desvio {dev_pct:+.1f}%" if dev_pct is not None else ""))
                     st.rerun()
 
-    # ---------- TAB LISTA ----------
+    # ---------- TAB LISTA (EDITÁVEL) ----------
     with tab_list:
-        status_filter = st.selectbox("Estado", ['Todas'] + PROD_STATUSES, key="prod_filter")
-        q = """SELECT fr.supplier as fornecedor, p.fabric_ref, p.model_name, p.confeccionador, p.po_qty, p.metres_expected, p.expected_date, p.status, p.po_number
-               FROM production p LEFT JOIN fabric_refs fr ON p.fabric_ref = fr.ref_code"""
-        if status_filter != 'Todas':
-            q += f" WHERE p.status = '{status_filter}'"
-        q += " ORDER BY p.expected_date"
-        prod_df = query_to_df(q)
-        if not prod_df.empty:
-            clean = safe_display_df(prod_df)
-            clean.columns = ['Fornecedor Tecido', 'Ref Tecido', 'Modelo', 'Confeccionador', 'Qty', 'Metros', 'Entrega', 'Status', 'PO']
-            st.dataframe(clean, use_container_width=True, hide_index=True, height=450)
-            total_m = prod_df['metres_expected'].fillna(0).sum()
-            st.markdown(f'<div class="section-subtitle">{len(prod_df)} POs | {total_m:,.0f}m esperados</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-subtitle">tabela dinâmica editável — edita células, adiciona ou remove linhas e grava com um clique. faturação fica na tab ao lado (faz baixa de stock).</div>', unsafe_allow_html=True)
+        status_filter = st.selectbox("Ver", ['Ativas (PENDING + CUTTING)', 'PENDING', 'CUTTING', 'INVOICED'], key="prod_filter")
+
+        base_q = """SELECT p.po_number, fr.supplier as fornecedor, p.fabric_ref, p.model_name, p.confeccionador,
+                           p.po_qty, p.metres_expected, p.expected_date, p.status
+                    FROM production p LEFT JOIN fabric_refs fr ON p.fabric_ref = fr.ref_code"""
+        if status_filter.startswith('Ativas'):
+            q = base_q + " WHERE p.status IN ('PENDING','CUTTING') ORDER BY p.expected_date"
         else:
-            st.info("Sem POs neste estado.")
+            q = base_q + f" WHERE p.status = '{status_filter}' ORDER BY p.expected_date"
+        prod_df = query_to_df(q)
+
+        if status_filter == 'INVOICED':
+            if not prod_df.empty:
+                clean = safe_display_df(prod_df)
+                clean.columns = ['PO', 'Fornecedor Tecido', 'Ref Tecido', 'Modelo', 'Confeccionador', 'Qty', 'Metros', 'Entrega', 'Estado']
+                st.dataframe(clean, use_container_width=True, hide_index=True, height=450)
+            else:
+                st.info("Sem POs faturadas.")
+        else:
+            refs_opts = query_to_df("SELECT ref_code FROM fabric_refs ORDER BY ref_code")['ref_code'].tolist()
+            edited = st.data_editor(
+                prod_df,
+                use_container_width=True, hide_index=True, num_rows="dynamic", height=450,
+                column_config={
+                    "po_number": st.column_config.TextColumn("PO", required=True),
+                    "fornecedor": st.column_config.TextColumn("Fornecedor Tecido", disabled=True),
+                    "fabric_ref": st.column_config.SelectboxColumn("Ref Tecido", options=refs_opts, required=True),
+                    "model_name": st.column_config.TextColumn("Modelo", required=True),
+                    "confeccionador": st.column_config.SelectboxColumn("Confeccionador", options=CONFECCIONADORES, required=True),
+                    "po_qty": st.column_config.NumberColumn("Qty", min_value=0, step=1, required=True),
+                    "metres_expected": st.column_config.NumberColumn("Metros", min_value=0.0, step=0.1, format="%.1f"),
+                    "expected_date": st.column_config.TextColumn("Entrega (AAAA-MM-DD)"),
+                    "status": st.column_config.SelectboxColumn("Estado", options=['PENDING', 'CUTTING'], required=True),
+                },
+                key="prod_editor")
+            total_m = pd.to_numeric(edited['metres_expected'], errors='coerce').fillna(0).sum()
+            st.markdown(f'<div class="section-subtitle">{len(edited)} POs | {total_m:,.0f}m esperados</div>', unsafe_allow_html=True)
+
+            if st.button("💾 Guardar alterações de produção", key="prod_save"):
+                edited = edited.dropna(subset=['po_number'])
+                edited = edited[edited['po_number'].astype(str).str.strip() != '']
+                conn = sqlite3.connect(DB_PATH)
+                cur = conn.cursor()
+                cur.execute("SELECT po_number FROM production WHERE status != 'INVOICED'")
+                existing = {r[0] for r in cur.fetchall()}
+                cur.execute("SELECT po_number FROM production WHERE status = 'INVOICED'")
+                invoiced_pos = {r[0] for r in cur.fetchall()}
+                keep = set(edited['po_number'].astype(str))
+                for po_del in existing - keep:
+                    cur.execute("DELETE FROM production WHERE po_number = ? AND status != 'INVOICED'", (po_del,))
+                n = 0
+                for _, r in edited.iterrows():
+                    po_val = str(r['po_number']).strip()
+                    if po_val in invoiced_pos:
+                        continue
+                    qty = 0 if pd.isna(r['po_qty']) else int(r['po_qty'])
+                    m_val = 0.0 if pd.isna(r['metres_expected']) else float(r['metres_expected'])
+                    cur.execute("INSERT OR REPLACE INTO production VALUES (?,?,?,?,?,?,?,?,?)",
+                                (po_val, r['model_name'], r['confeccionador'], qty, r['fabric_ref'],
+                                 m_val, r['expected_date'] if pd.notna(r['expected_date']) else None,
+                                 r['status'] or 'PENDING', datetime.now().isoformat()))
+                    n += 1
+                conn.commit()
+                conn.close()
+                log_movement('EDIT', None, None, None, None, None, None, f'Tabela de produção atualizada ({n} POs)')
+                st.success(f"✅ Produção guardada — {n} POs.")
+                st.rerun()
 
     # ---------- TAB STATUS ----------
     with tab_status:
@@ -1277,9 +1397,9 @@ def render_movement():
             sel_tokens = st.multiselect(
                 "Rolos a mover",
                 rolls_avail['token'].tolist(),
-                format_func=lambda t: f"{rolls_avail[rolls_avail['token']==t].iloc[0]['metres']:.1f}m" +
-                                      (f" · {rolls_avail[rolls_avail['token']==t].iloc[0]['color']}" if rolls_avail[rolls_avail['token']==t].iloc[0]['color'] else "") +
-                                      f" — {t}",
+                format_func=lambda t: f"{color_dot(rolls_avail[rolls_avail['token']==t].iloc[0]['color'])} "
+                                      f"{rolls_avail[rolls_avail['token']==t].iloc[0]['color'] if rolls_avail[rolls_avail['token']==t].iloc[0]['color'] else 's/cor'}"
+                                      f" · {rolls_avail[rolls_avail['token']==t].iloc[0]['metres']:.1f}m — {t}",
                 key="m1_tokens")
             total_sel = rolls_avail[rolls_avail['token'].isin(sel_tokens)]['metres'].sum()
             st.markdown(f'<div class="section-subtitle">{len(sel_tokens)} rolos selecionados — total {total_sel:,.1f}m</div>', unsafe_allow_html=True)
@@ -1300,7 +1420,8 @@ def render_movement():
                         execute_sql("UPDATE fabric_rolls SET warehouse = ?, status = ?, date_last_move = ? WHERE token = ?",
                                     (m1_to, m1_status, datetime.now().isoformat(), t))
                         m_val = rolls_avail[rolls_avail['token'] == t].iloc[0]['metres']
-                        log_movement('TRANSFER', t, m1_wh, m1_to, m1_ref, m_val, None, f'Rolo movido ({m1_status})')
+                        c_val = rolls_avail[rolls_avail['token'] == t].iloc[0]['color']
+                        log_movement('TRANSFER', t, m1_wh, m1_to, m1_ref, m_val, None, f'Rolo movido ({m1_status})', c_val)
                     st.success(f"✅ {len(sel_tokens)} rolos ({total_sel:,.1f}m) movidos de {m1_wh} → {m1_to}")
                     st.rerun()
 
@@ -1312,7 +1433,11 @@ def render_movement():
             st.info("Sem lotes em processo.")
         else:
             lot_sel = st.selectbox("Lote agregado", lots['token'].tolist(), key="m2_lot",
-                                   format_func=lambda t: f"{t} — {lots[lots['token']==t].iloc[0]['metres']:,.1f}m @ {lots[lots['token']==t].iloc[0]['warehouse']}")
+                                   format_func=lambda t: f"{color_dot(lots[lots['token']==t].iloc[0]['color'])} "
+                                                         f"{lots[lots['token']==t].iloc[0]['ref_code']}"
+                                                         f" · {lots[lots['token']==t].iloc[0]['color'] if lots[lots['token']==t].iloc[0]['color'] else 's/cor'}"
+                                                         f" · {lots[lots['token']==t].iloc[0]['metres']:,.1f}m"
+                                                         f" @ {lots[lots['token']==t].iloc[0]['warehouse']} — {t}")
             lot_row = lots[lots['token'] == lot_sel].iloc[0]
 
             c1, c2, c3 = st.columns(3)
@@ -1343,12 +1468,12 @@ def render_movement():
                                     (new_tok, lot_row['ref_code'], m2_metres, None, lot_row['color'], m2_to, m2_status, None,
                                      datetime.now().isoformat(), datetime.now().isoformat(), f'Dividido de {lot_sel}'))
                         log_movement('SPLIT', new_tok, lot_row['warehouse'], m2_to, lot_row['ref_code'], m2_metres, None,
-                                     f'Divisão de {lot_sel} ({m2_metres:.1f}m)')
+                                     f'Divisão de {lot_sel} ({m2_metres:.1f}m)', lot_row['color'])
                         st.success(f"✅ Lote dividido: {m2_metres:,.1f}m → {new_tok} em {m2_to}")
                     else:
                         execute_sql("UPDATE fabric_rolls SET warehouse = ?, status = ?, date_last_move = ? WHERE token = ?",
                                     (m2_to, m2_status, datetime.now().isoformat(), lot_sel))
-                        log_movement('TRANSFER', lot_sel, lot_row['warehouse'], m2_to, lot_row['ref_code'], m2_metres, None, 'Lote movido total')
+                        log_movement('TRANSFER', lot_sel, lot_row['warehouse'], m2_to, lot_row['ref_code'], m2_metres, None, 'Lote movido total', lot_row['color'])
                         st.success(f"✅ Lote {lot_sel} ({m2_metres:,.1f}m) movido → {m2_to}")
                     st.rerun()
 
@@ -1417,7 +1542,14 @@ def render_movement():
         with c1:
             recv_lot = st.text_input("Lote (opcional)", placeholder="L2026-B", key="recv_lot")
         with c2:
-            recv_color = st.text_input("Cor (opcional)", placeholder="Dark Navy", key="recv_color")
+            existing_colors = query_to_df("SELECT DISTINCT color FROM fabric_rolls WHERE ref_code = ? AND color IS NOT NULL AND color != '' ORDER BY color", (recv_ref,))['color'].tolist()
+            recv_color_sel = st.selectbox("Cor", existing_colors + ['➕ Nova cor…'],
+                                          format_func=lambda c: color_badge(c) if c != '➕ Nova cor…' else c,
+                                          key="recv_color_sel")
+            if recv_color_sel == '➕ Nova cor…':
+                recv_color = st.text_input("Escreve a nova cor", placeholder="Dark Navy", key="recv_color_new")
+            else:
+                recv_color = recv_color_sel
 
         if st.button("✓ Receber e gerar token", key="confirm_recv"):
             if recv_metres > 0:
@@ -1425,7 +1557,8 @@ def render_movement():
                 execute_sql("INSERT INTO fabric_rolls VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                             (token, recv_ref, recv_metres, recv_lot or None, recv_color or None, recv_wh, 'AVAILABLE', None,
                              datetime.now().isoformat(), datetime.now().isoformat(), None))
-                log_movement('RECEIPT', token, 'Fornecedor', recv_wh, recv_ref, recv_metres, None, f'Receção lote {recv_lot}' if recv_lot else 'Receção')
+                log_movement('RECEIPT', token, 'Fornecedor', recv_wh, recv_ref, recv_metres, None,
+                             f'Receção lote {recv_lot}' if recv_lot else 'Receção', recv_color or None)
                 st.success(f"✅ Novo rolo criado: {token} ({recv_metres:,.1f}m)")
                 st.rerun()
             else:
@@ -1481,10 +1614,11 @@ def render_movement():
 
     # Histórico
     st.markdown('<div class="section-title">Histórico de Movimentações — Últimas 20</div>', unsafe_allow_html=True)
-    hist_df = query_to_df("SELECT date_time, move_type, from_location, to_location, ref_code, metres, po_garment, notes, token FROM movements ORDER BY date_time DESC LIMIT 20")
+    hist_df = query_to_df("SELECT date_time, move_type, from_location, to_location, ref_code, color, metres, po_garment, notes, token FROM movements ORDER BY date_time DESC LIMIT 20")
     if not hist_df.empty:
         clean = safe_display_df(hist_df)
-        clean.columns = ['Data/Hora', 'Tipo', 'De', 'Para', 'Ref', 'Metros', 'PO', 'Notas', 'Token']
+        clean.columns = ['Data/Hora', 'Tipo', 'De', 'Para', 'Ref', 'Cor', 'Metros', 'PO', 'Notas', 'Token']
+        clean = apply_color_badges(clean, 'Cor')
         st.dataframe(clean, use_container_width=True, hide_index=True)
     else:
         st.info("Sem movimentações registadas.")
@@ -1505,6 +1639,7 @@ def render_trace():
 
             st.markdown(f"""
             <div class="trace-card">
+                <div style="color:#e0e6ed;font-size:16px;font-weight:600;margin-bottom:10px;">{color_dot(row['color'])} {row['ref_code']} · {row['color'] or 's/cor'}</div>
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
                     <div class="trace-token">{row['token']}</div>
                     <span class="badge {status_badge}">{row['status']}</span>
@@ -1523,11 +1658,12 @@ def render_trace():
             </div>
             """, unsafe_allow_html=True)
 
-            hist_df = query_to_df("SELECT date_time, move_type, from_location, to_location, ref_code, metres, po_garment, notes, token FROM movements WHERE token = ? OR po_garment = ? ORDER BY date_time DESC", (search, search))
+            hist_df = query_to_df("SELECT date_time, move_type, from_location, to_location, ref_code, color, metres, po_garment, notes, token FROM movements WHERE token = ? OR po_garment = ? ORDER BY date_time DESC", (search, search))
             if not hist_df.empty:
                 st.markdown('<div class="section-title">Histórico de Movimentações</div>', unsafe_allow_html=True)
                 clean = safe_display_df(hist_df)
-                clean.columns = ['Data/Hora', 'Tipo', 'De', 'Para', 'Ref', 'Metros', 'PO', 'Notas', 'Token']
+                clean.columns = ['Data/Hora', 'Tipo', 'De', 'Para', 'Ref', 'Cor', 'Metros', 'PO', 'Notas', 'Token']
+                clean = apply_color_badges(clean, 'Cor')
                 st.dataframe(clean, use_container_width=True, hide_index=True, height=250)
         else:
             po_df = query_to_df("SELECT * FROM production WHERE po_number = ?", (search,))
@@ -1547,13 +1683,15 @@ def render_trace():
                     st.markdown('<div class="section-title">Rolos/Lotes Alocados</div>', unsafe_allow_html=True)
                     clean = safe_display_df(roll_df)
                     clean.columns = ['Fornecedor', 'Ref', 'Cor', 'Metros', 'Local', 'Status', 'Token']
+                    clean = apply_color_badges(clean, 'Cor')
                     st.dataframe(clean, use_container_width=True, hide_index=True)
 
-                mov_df = query_to_df("SELECT date_time, move_type, from_location, to_location, ref_code, metres, notes, token FROM movements WHERE po_garment = ? ORDER BY date_time DESC", (search,))
+                mov_df = query_to_df("SELECT date_time, move_type, from_location, to_location, ref_code, color, metres, notes, token FROM movements WHERE po_garment = ? ORDER BY date_time DESC", (search,))
                 if not mov_df.empty:
                     st.markdown('<div class="section-title">Movimentações</div>', unsafe_allow_html=True)
                     clean = safe_display_df(mov_df)
-                    clean.columns = ['Data/Hora', 'Tipo', 'De', 'Para', 'Ref', 'Metros', 'Notas', 'Token']
+                    clean.columns = ['Data/Hora', 'Tipo', 'De', 'Para', 'Ref', 'Cor', 'Metros', 'Notas', 'Token']
+                    clean = apply_color_badges(clean, 'Cor')
                     st.dataframe(clean, use_container_width=True, hide_index=True)
             else:
                 st.warning("Nenhum resultado encontrado. Tenta outro token, PO ou referência.")
@@ -1635,7 +1773,7 @@ def main():
     st.sidebar.markdown(f"""
     <div style="position:fixed;bottom:20px;left:20px;right:20px;">
         <div style="border-top:1px solid rgba(255,255,255,0.06);padding-top:12px;color:#64748b;font-size:11px;text-align:center;">
-            v3.3.1 | Dados: CW29 2026<br>{datetime.now().strftime('%Y-%m-%d')}<br>
+            v3.4 | Dados: CW29 2026<br>{datetime.now().strftime('%Y-%m-%d')}<br>
             <span style="color:#3b82f6;font-weight:600;">SNT CMT</span>
         </div>
     </div>

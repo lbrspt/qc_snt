@@ -1,7 +1,19 @@
-# SNT CMT — Sistema de Stock & Produção v3.3.1
+# SNT CMT — Sistema de Stock & Produção v3.4
 
 Sistema de gestão de stock de tecidos, encomendas garment e consumos para a SNT.
 Dados reais carregados: CW29 2026.
+
+## Novidades v3.4
+
+| Pedido | Implementação |
+|---|---|
+| **Cor sempre ligada à referência** | Ponto de cor visual (🔵🟢⚫🟤🔘🟡🟣🔴🟠) consistente em todo o site: tabelas (coluna Cor), seleções de lotes/rolos, rastreio e dashboard (coluna **Cores** por referência). Cores com nome são mapeadas (navy→🔵, black→⚫, grey→🔘, brown→🟤, green→🟢, sand/beige→🟡...); códigos sem nome recebem cor estável automática |
+| **Token discreto** | Nas seleções vês `🔵 GB14W · UNI 10 · 673m @ Fabrijeans — P-…-001` (token sempre no fim); nas tabelas continua na última coluna |
+| **Receção com picker de cor** | Ao receber tecido, escolhes uma cor já existente para a ref ou "➕ Nova cor…" |
+| **Produção editável** | Tab "✏️ Tabela Editável": edita células, adiciona/remove linhas, grava com um clique. Faturação continua na tab ao lado (faz baixa de stock) |
+| **Estado SEWING removido** | Fluxo simplificado: PENDING → CUTTING → INVOICED |
+
+**Migração automática**: a v3.4 adiciona a coluna `color` aos movimentos sem perder dados existentes.
 
 ## Correções v3.3.1 (IMPORTANTE — deploy obrigatório)
 
@@ -35,7 +47,7 @@ O volume `qc_snt-volume` já está ligado com mount path `/app/data` — nada a 
 # 1. Substituir os ficheiros na pasta local do projeto
 # 2. Commit + push
 git add .
-git commit -m "v3.3.1 - Fix segfault PyArrow (requirements) + token na ultima coluna"
+git commit -m "v3.4 - Sistema de cor, producao editavel, sem SEWING"
 git push origin main
 # 3. Railway faz deploy automático (1-2 min)
 ```
