@@ -1,5 +1,5 @@
 """
-SNT CMT - Sistema de Stock & Produção v3.5
+SNT CMT - Sistema de Stock & Produção v3.6
 Dados reais CW29 2026
 v3.4:
 - Sistema de cor: cor sempre ligada à referência com ponto de cor visual em todo o site
@@ -232,7 +232,7 @@ st.markdown("""
 # ===================== DB SETUP =====================
 DATA_DIR = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH", "data")
 os.makedirs(DATA_DIR, exist_ok=True)
-DB_PATH = os.path.join(DATA_DIR, "snt_cmt_v35.db")
+DB_PATH = os.path.join(DATA_DIR, "snt_cmt_v36.db")
 
 # ===================== DB CONNECTION (sem cache) =====================
 def get_db_connection():
@@ -324,6 +324,22 @@ def apply_color_badges(df, col='Cor'):
         df[col] = df[col].apply(color_badge)
     return df
 
+def add_total_row(df, exclude=()):
+    """Acrescenta linha TOTAL com somatório das colunas numéricas (aplicar ANTES de safe_display_df)."""
+    if df.empty:
+        return df
+    total = {}
+    for i, c in enumerate(df.columns):
+        if c in exclude:
+            total[c] = ''
+        elif pd.api.types.is_numeric_dtype(df[c]):
+            total[c] = round(df[c].sum(), 2)
+        elif i == 0:
+            total[c] = '— TOTAL —'
+        else:
+            total[c] = ''
+    return pd.concat([df, pd.DataFrame([total])], ignore_index=True)
+
 
 # ===================== SEED DATA (CW29 2026, corrigido v3.3) =====================
 FABRIC_REFS = [
@@ -354,6 +370,19 @@ FABRIC_REFS = [
     ('Carreman-Azic', 'Carreman Azic', 'Carreman', 500),
     ('Carreman-Juana', 'Carreman Juana', 'Carreman', 500),
     ('Delegant', 'Delegant', 'Delegant', 200),
+    ('ACASH KD', 'Carreman Acash', 'Carreman', 1000),
+    ('TCC482/F1', 'Bird', 'Riopele', 300),
+    ('TCD488/EC1', 'Essential Twill', 'Riopele', 200),
+    ('TCD741/F1', 'Freely Cloudy Blue', 'Riopele', 300),
+    ('TCE081/EC1', 'Essential Night Silver', 'Riopele', 100),
+    ('TCE604/F1', 'SUT Domino Herringbone', 'Riopele', 200),
+    ('4600 48389', 'Tech Wool Check', 'Paulo Oliveira', 200),
+    ('A0 UNI-MH FW 25.26', 'Carreman Ease FW25.26', 'Carreman', 200),
+    ('No. 1 UNI-MH FW 25.26', 'Carreman Ease FW25.26', 'Carreman', 200),
+    ('No. 8 UNI-MH FW 25.26', 'Carreman Ease FW25.26', 'Carreman', 200),
+    ('R1 UNI-MH FW 25.26', 'Carreman Ease FW25.26', 'Carreman', 200),
+    ('T6 UNI-MH FW 25.26', 'Carreman Ease FW25.26', 'Carreman', 200),
+    ('W08 0601 UNI-MH FW 25.26', 'Carreman Ease FW25.26', 'Carreman', 200),
 ]
 
 INCOMING_FABRIC = [
@@ -409,7 +438,7 @@ PRODUCTION = [
     ('POAPS2000004377', 'Women Ease Pants Wide Vanilla Melange (Use all fabric)', 'Costa Correia', 86, 'GB14W', 120.40, '2026-07-31', 'PENDING'),
     ('POAPS2000004376', 'Women Ease Pants Straight Vanilla Melange (Use all fabric)', 'Costa Correia', 61, 'GB14W', 85.40, '2026-07-31', 'PENDING'),
     ('POAPS2000004299', 'Women Serene Blazer Walnut Herringbone (Use all fabric)', 'Tyrrell', 168, 'TCD340/RY1', 235.20, '2026-07-31', 'PENDING'),
-    ('POAPS2000004273', 'Timeless Wool Blazer Dark Brown Check', 'Tyrrell', 209, None, 292.60, '2026-07-31', 'PENDING'),
+    ('POAPS2000004273', 'Timeless Wool Blazer Dark Brown Check', 'Tyrrell', 209, '4600 48389', 292.60, '2026-07-31', 'PENDING'),
     ('POAPS2000004253', 'Motion Suit Pants Cognac', 'Samidel', 1001, '43793', 1401.40, '2026-07-31', 'PENDING'),
     ('POAPS2000004252', 'Motion Suit Pants Pepper Grey', 'Samidel', 600, '43793', 840.00, '2026-07-31', 'PENDING'),
     ('POAPS2000004251', 'Motion Suit Pants Midnight Blue', 'Samidel', 1074, '43793', 1503.60, '2026-07-31', 'PENDING'),
@@ -693,7 +722,7 @@ FABRIC_ROLLS = [
     ('R-TCD648_F1-110', 'TCD648/F1', 43.91, '17', 'Dark Grey 018', 'XBS', 'Devolvido pela Samidel'),
     ('R-TCD648_F1-111', 'TCD648/F1', 46.8, '17', 'Dark Grey 018', 'XBS', 'Devolvido pela Samidel'),
     ('R-TCD648_F1-112', 'TCD648/F1', 46.8, '17', 'Dark Grey 018', 'XBS', 'Devolvido pela Samidel'),
-    ('R-TCD648_F1-113', 'TCD648/F1', 39.5, '17', 'Dark Grey 018', 'XBS', 'Devolvido pela Samidel'),
+    ('R-TCD648_F1-113', 'TCD648/F1', 7.49, '17', 'Dark Grey 018', 'XBS', 'Ajuste audit CW29 (-32.01m)'),
     ('R-TCD648_F1-114', 'TCD648/F1', 43.02, '66', 'Black 001', 'XBS', 'Devolvido pela Samidel'),
     ('R-TCD648_F1-115', 'TCD648/F1', 29.22, '67', 'Black 001', 'XBS', 'Devolvido pela Samidel'),
     ('R-TCD648_F1-116', 'TCD648/F1', 50.63, '68', 'Black 001', 'XBS', 'Devolvido pela Samidel'),
@@ -758,7 +787,7 @@ FABRIC_ROLLS = [
     ('R-TCD648_F1-175', 'TCD648/F1', 48.67, '30', 'Green 003', 'XBS', 'Devolvido pela Samidel'),
     ('R-TCD648_F1-176', 'TCD648/F1', 42.88, '30', 'Green 003', 'XBS', 'Devolvido pela Samidel'),
     ('R-TCD648_F1-177', 'TCD648/F1', 57.2, '30', 'Green 003', 'XBS', 'Devolvido pela Samidel'),
-    ('R-TCD648_F1-178', 'TCD648/F1', 53.34, '30', 'Green 003', 'XBS', 'Devolvido pela Samidel'),
+    ('R-TCD648_F1-178', 'TCD648/F1', 48.81, '30', 'Green 003', 'XBS', 'Ajuste audit CW29 (-4.53m)'),
     ('R-TCD648_F1-179', 'TCD648/F1', 5.0, '41', 'Sand 002', 'XBS', 'Devolvido pela Samidel'),
     ('R-TCD648_F1-180', 'TCD648/F1', 22.66, '41', 'Sand 002', 'XBS', 'Devolvido pela Samidel'),
     ('R-TCD648_F1-181', 'TCD648/F1', 38.02, '40', 'Sand 002', 'XBS', 'Devolvido pela Samidel'),
@@ -781,46 +810,102 @@ FABRIC_ROLLS = [
     ('R-43793-013', '43793', 66.9, '260743.1', 'Black 344', 'XBS', None),
     ('R-43793-014', '43793', 68.0, '260743.1', 'Black 344', 'XBS', None),
     ('R-43793-015', '43793', 64.7, '260743.1', 'Black 344', 'XBS', None),
-    ('R-GZIC_GR4-001', 'GZIC GR4', 100.6, '0327-SD-HY', 'Dark Navy B5T01', 'XBS', None),
-    ('R-GZIC_GR4-002', 'GZIC GR4', 102.4, '0327-SD-HY', 'Dark Navy B5T01', 'XBS', None),
-    ('R-GZIC_GR4-003', 'GZIC GR4', 101.0, '0327-SD-HY', 'Dark Navy B5T01', 'XBS', None),
-    ('R-GZIC_GR4-004', 'GZIC GR4', 117.7, '0327-SD-HY', 'Dark Navy B5T01', 'XBS', None),
-    ('R-GZIC_GR4-005', 'GZIC GR4', 104.1, '0407-SD-HY', 'Dark Navy B5T01', 'XBS', None),
-    ('R-GZIC_GR4-006', 'GZIC GR4', 102.6, '0407-SD-HY', 'Dark Navy B5T01', 'XBS', None),
-    ('R-GZIC_GR4-007', 'GZIC GR4', 111.3, '0407-SD-HY', 'Dark Navy B5T01', 'XBS', None),
-    ('R-GZIC_GR4-008', 'GZIC GR4', 124.4, '0407-SD-HY', 'Dark Navy B5T01', 'XBS', None),
-    ('R-GZIC_GR4-009', 'GZIC GR4', 105.5, '0407-SD-HY', 'Dark Navy B5T01', 'XBS', None),
-    ('R-GZIC_GR4-010', 'GZIC GR4', 123.0, '0409-SD-HY', 'Dark Navy B5T01', 'XBS', None),
-    ('R-GZIC_GR4-011', 'GZIC GR4', 96.8, '0409-SD-HY', 'Dark Navy B5T01', 'XBS', None),
-    ('R-GZIC_GR4-012', 'GZIC GR4', 106.0, '0409-SD-HY', 'Dark Navy B5T01', 'XBS', None),
-    ('R-GZIC_GR4-013', 'GZIC GR4', 107.3, '0409-SD-HY', 'Dark Navy B5T01', 'XBS', None),
-    ('R-GZIC_GR4-014', 'GZIC GR4', 112.6, '0409-SD-HY', 'Dark Navy B5T01', 'XBS', None),
+    ('R-TCD648_F1-186', 'TCD648/F1', 2846.26, 'AUDIT-CW29', 'Black 001', 'XBS', 'Complemento audit CW29 — sem packing individual'),
+    ('R-GZIC_GR4-001', 'GZIC GR4', 421.7, 'AUDIT-CW29', 'Dark Navy B5T01', 'XBS', 'Lote agregado audit CW29 — sem packing individual'),
+    ('R-GZIC_GR4-002', 'GZIC GR4', 545.7, 'AUDIT-CW29', 'Dark Brown C7W01', 'XBS', 'Lote agregado audit CW29 — sem packing individual'),
+    ('R-GZIC_002-001', 'GZIC 002', 547.9, 'AUDIT-CW29', 'Dark Beige D8', 'XBS', 'Lote agregado audit CW29 — sem packing individual'),
 ]
 
-# Stock em processo (confeccionadores) — v3.3: ref base + cor separada
-# (token, ref_code, metres, color, confeccionador)
+# Stock em confeccionadores — v3.6: Fabric Audit CW29 completo (token, ref, metres, color, conf, nota)
 IN_PROCESS_STOCK = [
-    ('P-Fabrijeans_CostaC-TCB258_EC1-001', 'TCB258/EC1', 827.00, 'Dark Grey Melange', 'Fabrijeans / Costa C'),
-    ('P-Fabrijeans_CostaC-TCB258_EC1-002', 'TCB258/EC1', 208.97, 'Pine Green', 'Fabrijeans / Costa C'),
-    ('P-Fabrijeans_CostaC-TCB258_EC1-003', 'TCB258/EC1', 229.79, 'Dark Grey Melange', 'Fabrijeans / Costa C'),
-    ('P-Fabrijeans_CostaC-TCD524_EC1-001', 'TCD524/EC1', 1245.00, 'Almond', 'Fabrijeans / Costa C'),
-    ('P-Samidel-GB14W-001', 'GB14W', 1772.15, 'MH W9U1', 'Samidel'),
-    ('P-Samidel-GB14W-002', 'GB14W', 2015.10, 'MH 01U5', 'Samidel'),
-    ('P-Samidel-GB14W-003', 'GB14W', 1732.20, 'UNI A0', 'Samidel'),
-    ('P-Fabrijeans_CostaC-GB14W-001', 'GB14W', 673.00, 'UNI 10', 'Fabrijeans / Costa C'),
-    ('P-Samidel-GB14W-004', 'GB14W', 2439.60, 'UNI 10', 'Samidel'),
-    ('P-Fabrijeans_CostaC-GB14W-002', 'GB14W', 30.00, 'UNI 73', 'Fabrijeans / Costa C'),
-    ('P-Fabrijeans_CostaC-GB14W-003', 'GB14W', 212.00, 'UNI 91', 'Fabrijeans / Costa C'),
-    ('P-Fabrijeans_CostaC-GB14W-004', 'GB14W', 1584.60, 'UNI 93', 'Fabrijeans / Costa C'),
-    ('P-Fabrijeans_CostaC-GB14W-005', 'GB14W', 1134.80, 'UNI 1', 'Fabrijeans / Costa C'),
-    ('P-Samidel-GB14W-005', 'GB14W', 3922.00, 'UNI 1', 'Samidel'),
-    ('P-Fabrijeans_CostaC-GB14W-006', 'GB14W', 725.40, 'UNI Evergreen A1', 'Fabrijeans / Costa C'),
-    ('P-Samidel-Guana-001', 'Guana', 796.70, 'S32 Pepper Grey B5', 'Samidel'),
-    ('P-Samidel-Guana-002', 'Guana', 1465.90, 'TW6 Midnight Blue 10', 'Samidel'),
-    ('P-Fabrijeans_CostaC-Guana-001', 'Guana', 1387.10, 'S32 Cool Brown C2', 'Fabrijeans / Costa C'),
-    ('P-Fabrijeans_CostaC-Guana-002', 'Guana', 975.50, '089 Grey Flint B15', 'Fabrijeans / Costa C'),
-    ('P-Samidel-TCD340_RY1-001', 'TCD340/RY1', 60.99, 'Berry Pinstripe', 'Samidel'),
-    ('P-Fabrijeans_CostaC-TCE278_F1-001', 'TCE278/F1', 5755.33, 'Signature Dark Brown', 'Fabrijeans / Costa C'),
+    ('P-Acorfato-Guana-001', 'Guana', 235.0, 'S16 Black Check B102', 'Acorfato', 'Stock conf. (audit CW29)'),
+    ('P-Acorfato-Guana-002', 'Guana', 341.5, 'S32 Pepper Grey B5', 'Acorfato', 'Stock conf. (audit CW29)'),
+    ('P-Acorfato-Guana-003', 'Guana', 736.7, 'TW6 Midnight Blue 10', 'Acorfato', 'Stock conf. (audit CW29)'),
+    ('P-Acorfato-Guana-004', 'Guana', 742.3, 'UN2 Cognac 12', 'Acorfato', 'Stock conf. (audit CW29)'),
+    ('P-Acorfato-TCB258_EC1-001', 'TCB258/EC1', 304.49, 'Dark Grey Melange 0318', 'Acorfato', 'Stock conf. (audit CW29)'),
+    ('P-Acorfato-TCB258_EC1-002', 'TCB258/EC1', 458.47, 'Medium Beige Melange 1049', 'Acorfato', 'Stock conf. (audit CW29)'),
+    ('P-Acorfato-TCB258_EC1-003', 'TCB258/EC1', 502.32, 'Pine Green 1028', 'Acorfato', 'Stock conf. (audit CW29)'),
+    ('P-Acorfato-TCE081_EC1-001', 'TCE081/EC1', 5.26, 'Night Silver Pinstripe 001', 'Acorfato', 'Stock conf. (audit CW29)'),
+    ('P-Acorfato-TCE604_F1-001', 'TCE604/F1', 177.7, 'Domino Herringbone 001', 'Acorfato', 'Stock conf. (audit CW29)'),
+    ('P-Antonio_Carla-43793-001', '43793', 10.0, 'Cocoa Brown 954', 'António & Carla', 'Stock conf. (audit CW29)'),
+    ('P-Antonio_Carla-43793-002', '43793', 37.0, 'Navy 7143', 'António & Carla', 'Stock conf. (audit CW29)'),
+    ('P-Fabrijeans_CostaC-A0_UNI-MH_FW_25.26-001', 'A0 UNI-MH FW 25.26', 201.5, 'Dark Chestnut Melange', 'Fabrijeans / Costa C', 'Stock conf. (audit CW29)'),
+    ('P-Fabrijeans_CostaC-ACASH_KD-001', 'ACASH KD', 3257.9, 'Black 09', 'Fabrijeans / Costa C', 'Stock conf. (audit CW29)'),
+    ('P-Fabrijeans_CostaC-ACASH_KD-002', 'ACASH KD', 1277.8, 'Blue Nights 99543', 'Fabrijeans / Costa C', 'Stock conf. (audit CW29)'),
+    ('P-Fabrijeans_CostaC-ACASH_KD-003', 'ACASH KD', 1049.5, 'Dark Grey Melange 75882', 'Fabrijeans / Costa C', 'Stock conf. (audit CW29)'),
+    ('P-Fabrijeans_CostaC-ACASH_KD-004', 'ACASH KD', 997.7, 'Dusty Olive 47654', 'Fabrijeans / Costa C', 'Stock conf. (audit CW29)'),
+    ('P-Fabrijeans_CostaC-ACASH_KD-005', 'ACASH KD', 2456.4, 'Mocha 58640', 'Fabrijeans / Costa C', 'Stock conf. (audit CW29)'),
+    ('P-Fabrijeans_CostaC-GB14W-001', 'GB14W', 725.4, 'UNI Evergreen A1', 'Fabrijeans / Costa C', 'Em processo (audit CW29)'),
+    ('P-Fabrijeans_CostaC-GB14W-002', 'GB14W', 1134.8, 'UNI 1 Black', 'Fabrijeans / Costa C', 'Em processo (audit CW29)'),
+    ('P-Fabrijeans_CostaC-GB14W-003', 'GB14W', 673.0, 'UNI 10 Blue Nights', 'Fabrijeans / Costa C', 'Em processo (audit CW29)'),
+    ('P-Fabrijeans_CostaC-GB14W-004', 'GB14W', 30.0, 'UNI 73 Steel Melange', 'Fabrijeans / Costa C', 'Em processo (audit CW29)'),
+    ('P-Fabrijeans_CostaC-GB14W-005', 'GB14W', 212.0, 'UNI 91 Vanilla Melange', 'Fabrijeans / Costa C', 'Em processo (audit CW29)'),
+    ('P-Fabrijeans_CostaC-GB14W-006', 'GB14W', 1584.6, 'UNI 93 Mocha Melange', 'Fabrijeans / Costa C', 'Em processo (audit CW29)'),
+    ('P-Fabrijeans_CostaC-Guana-001', 'Guana', 975.5, '089 Grey Flint B15', 'Fabrijeans / Costa C', 'Em processo (audit CW29)'),
+    ('P-Fabrijeans_CostaC-Guana-002', 'Guana', 822.3, 'S16 Black Check B102', 'Fabrijeans / Costa C', 'Stock conf. (audit CW29)'),
+    ('P-Fabrijeans_CostaC-Guana-003', 'Guana', 1387.1, 'S32 Cool Brown C2', 'Fabrijeans / Costa C', 'Em processo (audit CW29)'),
+    ('P-Fabrijeans_CostaC-No._1_UNI-MH_FW_25.26-001', 'No. 1 UNI-MH FW 25.26', 629.12, 'Black', 'Fabrijeans / Costa C', 'Stock conf. (audit CW29)'),
+    ('P-Fabrijeans_CostaC-No._8_UNI-MH_FW_25.26-001', 'No. 8 UNI-MH FW 25.26', 214.9, 'Cloud Grey', 'Fabrijeans / Costa C', 'Stock conf. (audit CW29)'),
+    ('P-Fabrijeans_CostaC-R1_UNI-MH_FW_25.26-001', 'R1 UNI-MH FW 25.26', 180.0, 'Navy', 'Fabrijeans / Costa C', 'Stock conf. (audit CW29)'),
+    ('P-Fabrijeans_CostaC-T6_UNI-MH_FW_25.26-001', 'T6 UNI-MH FW 25.26', 194.0, 'Dark Green', 'Fabrijeans / Costa C', 'Stock conf. (audit CW29)'),
+    ('P-Fabrijeans_CostaC-TCB258_EC1-001', 'TCB258/EC1', 973.64, 'Black 017', 'Fabrijeans / Costa C', 'Stock conf. (audit CW29)'),
+    ('P-Fabrijeans_CostaC-TCB258_EC1-002', 'TCB258/EC1', 229.79, 'Dark Grey Melange 0318', 'Fabrijeans / Costa C', 'Em processo (audit CW29)'),
+    ('P-Fabrijeans_CostaC-TCB258_EC1-003', 'TCB258/EC1', 127.52, 'Medium Beige Melange 1049', 'Fabrijeans / Costa C', 'Stock conf. (audit CW29)'),
+    ('P-Fabrijeans_CostaC-TCB258_EC1-004', 'TCB258/EC1', 83.63, 'Midnight Blue 0917', 'Fabrijeans / Costa C', 'Stock conf. (audit CW29)'),
+    ('P-Fabrijeans_CostaC-TCB258_EC1-005', 'TCB258/EC1', 827.0, 'Midnight Blue 0917', 'Fabrijeans / Costa C', 'Em processo (audit CW29)'),
+    ('P-Fabrijeans_CostaC-TCB258_EC1-006', 'TCB258/EC1', 208.97, 'Pine Green 1028', 'Fabrijeans / Costa C', 'Em processo (audit CW29)'),
+    ('P-Fabrijeans_CostaC-TCB258_EC1-007', 'TCB258/EC1', 14.0, 'Sand 0909', 'Fabrijeans / Costa C', 'Stock conf. (audit CW29)'),
+    ('P-Fabrijeans_CostaC-TCC130_RY1-001', 'TCC130/RY1', 1923.97, 'Brown Herringbone 002', 'Fabrijeans / Costa C', 'Stock conf. (audit CW29)'),
+    ('P-Fabrijeans_CostaC-TCC132_RY1-001', 'TCC132/RY1', 1669.61, 'Black 003', 'Fabrijeans / Costa C', 'Stock conf. (audit CW29)'),
+    ('P-Fabrijeans_CostaC-TCD340_RY1-001', 'TCD340/RY1', 580.63, 'Berry Pinstripe 007', 'Fabrijeans / Costa C', 'Stock conf. (audit CW29)'),
+    ('P-Fabrijeans_CostaC-TCD524_EC1-001', 'TCD524/EC1', 560.66, 'Almond 001', 'Fabrijeans / Costa C', 'Stock conf. (audit CW29)'),
+    ('P-Fabrijeans_CostaC-TCD524_EC1-002', 'TCD524/EC1', 1245.0, 'Almond 001', 'Fabrijeans / Costa C', 'Em processo (audit CW29)'),
+    ('P-Fabrijeans_CostaC-TCD648_F1-001', 'TCD648/F1', 3287.75, 'Black 001', 'Fabrijeans / Costa C', 'Stock conf. (audit CW29)'),
+    ('P-Fabrijeans_CostaC-TCD648_F1-002', 'TCD648/F1', 60.0, 'Dark Grey 018', 'Fabrijeans / Costa C', 'Stock conf. (audit CW29)'),
+    ('P-Fabrijeans_CostaC-TCD648_F1-003', 'TCD648/F1', 1560.64, 'Green 003', 'Fabrijeans / Costa C', 'Stock conf. (audit CW29)'),
+    ('P-Fabrijeans_CostaC-TCD648_F1-004', 'TCD648/F1', 3506.65, 'Navy 004', 'Fabrijeans / Costa C', 'Stock conf. (audit CW29)'),
+    ('P-Fabrijeans_CostaC-TCD648_F1-005', 'TCD648/F1', 406.16, 'Sand 002', 'Fabrijeans / Costa C', 'Stock conf. (audit CW29)'),
+    ('P-Fabrijeans_CostaC-TCD741_F1-001', 'TCD741/F1', 1766.2, 'Cloudy Blue 001', 'Fabrijeans / Costa C', 'Stock conf. (audit CW29)'),
+    ('P-Fabrijeans_CostaC-TCE278_F1-001', 'TCE278/F1', 5755.33, 'Signature Dark Brown 006', 'Fabrijeans / Costa C', 'Em processo (audit CW29)'),
+    ('P-Fabrijeans_CostaC-TCE278_F1-002', 'TCE278/F1', 2673.18, 'Signature Green 002', 'Fabrijeans / Costa C', 'Stock conf. (audit CW29)'),
+    ('P-Fabrijeans_CostaC-TCE278_F1-003', 'TCE278/F1', 271.88, 'Signature Mid Blue 007', 'Fabrijeans / Costa C', 'Stock conf. (audit CW29)'),
+    ('P-Fabrijeans_CostaC-TCE278_F1-004', 'TCE278/F1', 290.48, 'Signature Navy 003', 'Fabrijeans / Costa C', 'Stock conf. (audit CW29)'),
+    ('P-Fabrijeans_CostaC-TCE278_F1-005', 'TCE278/F1', 2913.84, 'Signature Sand 001', 'Fabrijeans / Costa C', 'Stock conf. (audit CW29)'),
+    ('P-Fabrijeans_CostaC-TCE604_F1-001', 'TCE604/F1', 640.46, 'Domino Herringbone 001', 'Fabrijeans / Costa C', 'Stock conf. (audit CW29)'),
+    ('P-Fabrijeans_CostaC-W08_0601_UNI-MH_FW_25.26-001', 'W08 0601 UNI-MH FW 25.26', 351.4, 'Charcoal Melange', 'Fabrijeans / Costa C', 'Stock conf. (audit CW29)'),
+    ('P-Samidel-43793-001', '43793', 690.9, 'Navy 7143', 'Samidel', 'Stock conf. (audit CW29)'),
+    ('P-Samidel-GB14W-001', 'GB14W', 1068.2, 'MH Northern Pine A101', 'Samidel', 'Stock conf. (audit CW29)'),
+    ('P-Samidel-GB14W-002', 'GB14W', 2015.1, 'MH 01U5 Dark Grey', 'Samidel', 'Em processo (audit CW29)'),
+    ('P-Samidel-GB14W-003', 'GB14W', 1772.15, 'MH W9U1 Sahara', 'Samidel', 'Em processo (audit CW29)'),
+    ('P-Samidel-GB14W-004', 'GB14W', 116.4, 'UNI 1 Black', 'Samidel', 'Stock conf. (audit CW29)'),
+    ('P-Samidel-GB14W-005', 'GB14W', 3922.0, 'UNI 1 Black', 'Samidel', 'Em processo (audit CW29)'),
+    ('P-Samidel-GB14W-006', 'GB14W', 80.2, 'UNI 10 Blue Nights', 'Samidel', 'Stock conf. (audit CW29)'),
+    ('P-Samidel-GB14W-007', 'GB14W', 2439.6, 'UNI 10 Blue Nights', 'Samidel', 'Em processo (audit CW29)'),
+    ('P-Samidel-GB14W-008', 'GB14W', 67.3, 'UNI 93 Mocha Melange', 'Samidel', 'Stock conf. (audit CW29)'),
+    ('P-Samidel-GB14W-009', 'GB14W', 1732.2, 'UNI A0 Mocha', 'Samidel', 'Em processo (audit CW29)'),
+    ('P-Samidel-GZIC_002-001', 'GZIC 002', 1204.4, 'Dark Beige D8', 'Samidel', 'Stock conf. (audit CW29)'),
+    ('P-Samidel-GZIC_GR4-001', 'GZIC GR4', 1585.7, 'Dark Brown C7W01', 'Samidel', 'Stock conf. (audit CW29)'),
+    ('P-Samidel-GZIC_GR4-002', 'GZIC GR4', 1672.3, 'Dark Navy B5T01', 'Samidel', 'Stock conf. (audit CW29)'),
+    ('P-Samidel-GZIC_GR5-001', 'GZIC GR5', 1103.2, 'Dark Grey B2S01', 'Samidel', 'Stock conf. (audit CW29)'),
+    ('P-Samidel-Guana-001', 'Guana', 796.7, 'S32 Pepper Grey B5', 'Samidel', 'Em processo (audit CW29)'),
+    ('P-Samidel-Guana-002', 'Guana', 1465.9, 'TW6 Midnight Blue 10', 'Samidel', 'Em processo (audit CW29)'),
+    ('P-Samidel-Guana-003', 'Guana', 1458.5, 'UN2 Cognac 12', 'Samidel', 'Stock conf. (audit CW29)'),
+    ('P-Samidel-TCB258_EC1-001', 'TCB258/EC1', 1609.07, 'Black 017', 'Samidel', 'Stock conf. (audit CW29)'),
+    ('P-Samidel-TCB258_EC1-002', 'TCB258/EC1', 128.09, 'Medium Beige Melange 1049', 'Samidel', 'Stock conf. (audit CW29)'),
+    ('P-Samidel-TCB258_EC1-003', 'TCB258/EC1', 575.86, 'Midnight Blue 0917', 'Samidel', 'Stock conf. (audit CW29)'),
+    ('P-Samidel-TCB258_EC1-004', 'TCB258/EC1', 2156.3, 'Navy 0929', 'Samidel', 'Stock conf. (audit CW29)'),
+    ('P-Samidel-TCC482_F1-001', 'TCC482/F1', 388.39, 'Ashes 002', 'Samidel', 'Stock conf. (audit CW29)'),
+    ('P-Samidel-TCD340_RY1-001', 'TCD340/RY1', 60.99, 'Berry Pinstripe 007', 'Samidel', 'Em processo (audit CW29)'),
+    ('P-Samidel-TCD488_EC1-001', 'TCD488/EC1', 249.1, 'Light Blue 001', 'Samidel', 'Stock conf. (audit CW29)'),
+    ('P-Samidel-TCD648_F1-001', 'TCD648/F1', 160.0, 'Navy 004', 'Samidel', 'Stock conf. (audit CW29)'),
+    ('P-Tyrrell-43793-001', '43793', 396.0, 'Sand 2952', 'Tyrrell', 'Stock conf. (audit CW29)'),
+    ('P-Tyrrell-4600_48389-001', '4600 48389', 449.7, 'Dark Brown Check 977', 'Tyrrell', 'Stock conf. (audit CW29)'),
+    ('P-Tyrrell-GB14W-001', 'GB14W', 22.0, 'UNI 93 Mocha Melange', 'Tyrrell', 'Stock conf. (audit CW29)'),
+    ('P-Tyrrell-TCB258_EC1-001', 'TCB258/EC1', 442.53, 'Medium Beige Melange 1049', 'Tyrrell', 'Stock conf. (audit CW29)'),
+    ('P-Tyrrell-TCB258_EC1-002', 'TCB258/EC1', 732.62, 'Midnight Blue 0917', 'Tyrrell', 'Stock conf. (audit CW29)'),
+    ('P-Tyrrell-TCB258_EC1-003', 'TCB258/EC1', 194.79, 'Pine Green 1028', 'Tyrrell', 'Stock conf. (audit CW29)'),
+    ('P-Tyrrell-TCC130_RY1-001', 'TCC130/RY1', 290.02, 'Brown Herringbone 002', 'Tyrrell', 'Stock conf. (audit CW29)'),
+    ('P-Tyrrell-TCD524_EC1-001', 'TCD524/EC1', 474.35, 'Almond 001', 'Tyrrell', 'Stock conf. (audit CW29)'),
 ]
 
 REAL_CONSUMPTIONS = [
@@ -974,11 +1059,11 @@ def init_db():
                          (token, ref, metres, lot, color, wh, 'AVAILABLE', None,
                           datetime.now().isoformat(), datetime.now().isoformat(), notes))
 
-        # In-process stock (confeccionadores) — lotes agregados com token P-
-        for token, ref, metres, color, conf in IN_PROCESS_STOCK:
+        # Stock em confeccionadores (audit CW29) — lotes agregados com token P-
+        for token, ref, metres, color, conf, nota in IN_PROCESS_STOCK:
             cursor.execute("INSERT INTO fabric_rolls VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                          (token, ref, metres, None, color, conf, 'IN_PROCESS', None,
-                          datetime.now().isoformat(), datetime.now().isoformat(), f'Lote agregado em {conf}'))
+                          datetime.now().isoformat(), datetime.now().isoformat(), nota))
 
         # Consumos reais CW28/29 com desvios
         for po, model, pcs, exp_m, act_m, dev, date, conf, notes in REAL_CONSUMPTIONS:
@@ -1094,7 +1179,7 @@ def render_dashboard():
         <div style="display:flex;justify-content:space-between;align-items:center;">
             <div>
                 <h1>🏭 SNT CMT</h1>
-                <p>Sistema de Stock & Produção v3.5 | CW29 2026</p>
+                <p>Sistema de Stock & Produção v3.6 | CW29 2026</p>
             </div>
             <div class="live-badge"><span class="live-dot"></span> LIVE</div>
         </div>
@@ -1165,6 +1250,7 @@ def render_dashboard():
             return shown + (f" +{len(parts) - 3}" if len(parts) > 3 else '')
 
         display_df['cores'] = display_df['cores'].apply(_cores_short)
+        display_df = add_total_row(display_df)
         display_df = safe_display_df(display_df)
         display_df.columns = ['Fornecedor', 'Ref', 'Descrição', 'Cores', 'Disponível', 'Em Processo', 'Stock Líquido', 'A Chegar', 'Necessidade', 'Planeamento', 'Status']
         st.dataframe(display_df, use_container_width=True, hide_index=True, height=400)
@@ -1242,7 +1328,7 @@ def render_stock():
             query += " AND r.status = ?"; params.append(selected_status)
         query += " ORDER BY r.ref_code, r.token LIMIT 500"
 
-        rolls_df = query_to_df(query, params)
+        rolls_df = add_total_row(query_to_df(query, params))
         clean_df = safe_display_df(rolls_df)
         clean_df.columns = ['Fornecedor', 'Ref', 'Cor', 'Metros', 'Lote', 'Armazém', 'Status', 'PO Garment', 'Notas', 'Token']
         clean_df = apply_color_badges(clean_df, 'Cor')
@@ -1330,7 +1416,7 @@ def render_incoming():
     """)
 
     if not incoming_df.empty:
-        clean = safe_display_df(incoming_df)
+        clean = safe_display_df(add_total_row(incoming_df))
         clean.columns = ['Fornecedor', 'Ref', 'Descrição', 'Metros', 'Data Prevista', 'Status', 'Tracking', 'PO']
         st.dataframe(clean, use_container_width=True, hide_index=True, height=400)
 
@@ -1498,7 +1584,7 @@ def render_production():
 
         if status_filter == 'INVOICED':
             if not prod_df.empty:
-                clean = safe_display_df(prod_df)
+                clean = safe_display_df(add_total_row(prod_df))
                 clean.columns = ['PO', 'Fornecedor Tecido', 'Ref Tecido', 'Modelo', 'Confeccionador', 'Qty', 'Metros', 'Entrega', 'Estado']
                 st.dataframe(clean, use_container_width=True, hide_index=True, height=450)
             else:
@@ -1626,7 +1712,7 @@ def render_consumos():
     with tab_real:
         cons_df = query_to_df("SELECT * FROM consumptions ORDER BY date_cut DESC, id DESC")
         if not cons_df.empty:
-            clean = safe_display_df(cons_df)
+            clean = safe_display_df(add_total_row(cons_df, exclude=['id', 'deviation_pct']))
             clean.columns = ['ID', 'PO Garment', 'Modelo', 'Peças', 'Metros Esperados', 'Metros Reais', 'Desvio %', 'Data Corte', 'Confeccionador', 'Notas']
             st.dataframe(clean, use_container_width=True, hide_index=True, height=400)
             n_high = cons_df[cons_df['deviation_pct'].fillna(0).abs() > 5].shape[0]
@@ -1906,7 +1992,7 @@ def render_movement():
     st.markdown('<div class="section-title">Histórico de Movimentações — Últimas 20</div>', unsafe_allow_html=True)
     hist_df = query_to_df("SELECT date_time, move_type, from_location, to_location, ref_code, color, metres, po_garment, notes, token FROM movements ORDER BY date_time DESC LIMIT 20")
     if not hist_df.empty:
-        clean = safe_display_df(hist_df)
+        clean = safe_display_df(add_total_row(hist_df))
         clean.columns = ['Data/Hora', 'Tipo', 'De', 'Para', 'Ref', 'Cor', 'Metros', 'PO', 'Notas', 'Token']
         clean = apply_color_badges(clean, 'Cor')
         st.dataframe(clean, use_container_width=True, hide_index=True)
@@ -1951,7 +2037,7 @@ def render_trace():
             hist_df = query_to_df("SELECT date_time, move_type, from_location, to_location, ref_code, color, metres, po_garment, notes, token FROM movements WHERE token = ? OR po_garment = ? ORDER BY date_time DESC", (search, search))
             if not hist_df.empty:
                 st.markdown('<div class="section-title">Histórico de Movimentações</div>', unsafe_allow_html=True)
-                clean = safe_display_df(hist_df)
+                clean = safe_display_df(add_total_row(hist_df))
                 clean.columns = ['Data/Hora', 'Tipo', 'De', 'Para', 'Ref', 'Cor', 'Metros', 'PO', 'Notas', 'Token']
                 clean = apply_color_badges(clean, 'Cor')
                 st.dataframe(clean, use_container_width=True, hide_index=True, height=250)
@@ -1964,14 +2050,14 @@ def render_trace():
                 cons_df = query_to_df("SELECT * FROM consumptions WHERE po_garment = ?", (search,))
                 if not cons_df.empty:
                     st.markdown('<div class="section-title">Consumos Registados</div>', unsafe_allow_html=True)
-                    st.dataframe(safe_display_df(cons_df), use_container_width=True, hide_index=True)
+                    st.dataframe(safe_display_df(add_total_row(cons_df, exclude=['id', 'deviation_pct'])), use_container_width=True, hide_index=True)
 
                 roll_df = query_to_df("""SELECT fr.supplier, r.ref_code, r.color, r.metres, r.warehouse, r.status, r.token
                                          FROM fabric_rolls r LEFT JOIN fabric_refs fr ON r.ref_code = fr.ref_code
                                          WHERE r.po_garment = ?""", (search,))
                 if not roll_df.empty:
                     st.markdown('<div class="section-title">Rolos/Lotes Alocados</div>', unsafe_allow_html=True)
-                    clean = safe_display_df(roll_df)
+                    clean = safe_display_df(add_total_row(roll_df))
                     clean.columns = ['Fornecedor', 'Ref', 'Cor', 'Metros', 'Local', 'Status', 'Token']
                     clean = apply_color_badges(clean, 'Cor')
                     st.dataframe(clean, use_container_width=True, hide_index=True)
@@ -1979,7 +2065,7 @@ def render_trace():
                 mov_df = query_to_df("SELECT date_time, move_type, from_location, to_location, ref_code, color, metres, notes, token FROM movements WHERE po_garment = ? ORDER BY date_time DESC", (search,))
                 if not mov_df.empty:
                     st.markdown('<div class="section-title">Movimentações</div>', unsafe_allow_html=True)
-                    clean = safe_display_df(mov_df)
+                    clean = safe_display_df(add_total_row(mov_df))
                     clean.columns = ['Data/Hora', 'Tipo', 'De', 'Para', 'Ref', 'Cor', 'Metros', 'Notas', 'Token']
                     clean = apply_color_badges(clean, 'Cor')
                     st.dataframe(clean, use_container_width=True, hide_index=True)
@@ -2002,7 +2088,7 @@ def render_export():
             <div class="info-card-text">posição por referência + cor, com planeamento</div>
         </div>
         """, unsafe_allow_html=True)
-        df = get_stock_position()
+        df = add_total_row(get_stock_position(), exclude=['cores'])
         download_pair(df, f"stock_resumido_{datetime.now().strftime('%Y%m%d')}", 'Stock Resumido', 'exp_sum')
 
     with col2:
@@ -2016,7 +2102,7 @@ def render_export():
         df2 = query_to_df("""SELECT fr.supplier, r.ref_code, r.color, r.metres, r.lot, r.warehouse, r.status, r.po_garment, r.date_last_move, r.notes, r.token
                              FROM fabric_rolls r LEFT JOIN fabric_refs fr ON r.ref_code = fr.ref_code
                              WHERE r.status != 'INVOICED' ORDER BY r.ref_code, r.token""")
-        download_pair(df2, f"stock_detalhado_{datetime.now().strftime('%Y%m%d')}", 'Stock Detalhado', 'exp_det')
+        download_pair(add_total_row(df2), f"stock_detalhado_{datetime.now().strftime('%Y%m%d')}", 'Stock Detalhado', 'exp_det')
 
     with col3:
         st.markdown("""
@@ -2027,11 +2113,11 @@ def render_export():
         </div>
         """, unsafe_allow_html=True)
         df3 = query_to_df("SELECT * FROM consumptions ORDER BY date_cut DESC")
-        download_pair(df3, f"consumos_{datetime.now().strftime('%Y%m%d')}", 'Consumos', 'exp_cons')
+        download_pair(add_total_row(df3, exclude=['id', 'deviation_pct']), f"consumos_{datetime.now().strftime('%Y%m%d')}", 'Consumos', 'exp_cons')
         df4 = query_to_df("SELECT * FROM movements WHERE date_time >= ? ORDER BY date_time DESC",
                           ((datetime.now().replace(day=1)).isoformat(),))
         st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
-        download_pair(df4, f"movimentos_mes_{datetime.now().strftime('%Y%m')}", 'Movimentos', 'exp_mov')
+        download_pair(add_total_row(df4, exclude=['id']), f"movimentos_mes_{datetime.now().strftime('%Y%m')}", 'Movimentos', 'exp_mov')
 
 
 # ===================== MAIN =====================
@@ -2063,7 +2149,7 @@ def main():
     st.sidebar.markdown(f"""
     <div style="position:fixed;bottom:20px;left:20px;right:20px;">
         <div style="border-top:1px solid rgba(255,255,255,0.06);padding-top:12px;color:#64748b;font-size:11px;text-align:center;">
-            v3.5 | Dados: CW29 2026<br>{datetime.now().strftime('%Y-%m-%d')}<br>
+            v3.6 | Dados: CW29 2026<br>{datetime.now().strftime('%Y-%m-%d')}<br>
             <span style="color:#3b82f6;font-weight:600;">SNT CMT</span>
         </div>
     </div>

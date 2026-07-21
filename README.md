@@ -1,9 +1,23 @@
-# SNT CMT — Sistema de Stock & Produção v3.5
+# SNT CMT — Sistema de Stock & Produção v3.6
 
 Sistema de gestão de stock de tecidos, encomendas garment e consumos para a SNT.
 Dados reais carregados: CW29 2026.
 
-## v3.5 — Stock XBS completo com cores (novo ponto de partida)
+## v3.6 — Stock = Fabric Audit CW29 (ao cêntimo) + Totais em todas as tabelas
+
+| O que mudou | Detalhe |
+|---|---|
+| **Stock sincronizado com o Fabric Audit CW29** | Total geral **103.058,79m** — bate certo ao cêntimo com o audit |
+| **Confeccionadores corrigidos** | Fabrijeans/Costa C 49.931,91m · Samidel 28.518,55m · Acorfato 3.503,74m · Tyrrell 3.002,01m · António & Carla 47,00m — cada lote com **ref + cor** (88 lotes) |
+| **Distinção stock vs em processo** | Nos confeccionadores, os lotes trazem nota "Stock conf." (ainda não cortado) vs "Em processo" — como no audit |
+| **GB14W cores completas** | código + nome: "UNI 1 Black", "MH W9U1 Sahara", "UNI 93 Mocha Melange"… |
+| **Refs novas** | ACASH KD, TCC482/F1, TCD488/EC1, TCD741/F1, TCE081/EC1, TCE604/F1, 4600 48389 (ligada à PO Timeless Wool Blazer), coleção UNI-MH FW 25.26 |
+| **XBS reconciliado com o audit** | 18.055,58m: complemento TCD648 Black 001 (+2.846,26m sem packing), GZIC com as cores reais do audit (Dark Navy/Dark Brown/Dark Beige), ajustes −32,01m e −4,53m |
+| **Linha TOTAL em todas as tabelas** | Somatório de metros (e qty) no fim de todas as listagens — Dashboard, Stock (respeita os filtros ativos), A Chegar, Produção, Consumos, Movimentações, Rastreio — e também nos **extratos Excel/CSV** |
+
+⚠️ Base nova (`snt_cmt_v36.db`) — ponto de partida certo e definitivo a partir do audit CW29.
+
+## v3.5 — Stock XBS completo com cores
 
 | O que mudou | Detalhe |
 |---|---|
@@ -83,7 +97,7 @@ O volume `qc_snt-volume` já está ligado com mount path `/app/data` — nada a 
 # 1. Substituir os ficheiros na pasta local do projeto
 # 2. Commit + push
 git add .
-git commit -m "v3.5 - Stock XBS completo com cores (319 rolos)"
+git commit -m "v3.6 - Stock sincronizado com Fabric Audit CW29 + totais nas tabelas"
 git push origin main
 # 3. Railway faz deploy automático (1-2 min)
 ```
