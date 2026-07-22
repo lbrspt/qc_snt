@@ -1,7 +1,33 @@
-# SNT CMT — Sistema de Stock & Produção v3.7.1
+# SNT CMT — Sistema de Stock & Produção v3.8
 
 Sistema de gestão de stock de tecidos, encomendas garment e consumos para a SNT.
 Dados reais carregados: CW29 2026.
+
+## v3.8 — Quadro "Em Curso" + autorização de cortes extra
+
+| O que mudou | Detalhe |
+|---|---|
+| **Novo separador 🏃 Em Curso** (Consumos) | Cartão visual por PO em corte: progresso de pcs (barra), metros usados, **m/pc atual vs standard**, chip de desvio 🟢/🟠/🔴 e **projeção de metros extra no fim da PO**. Ordenado do pior desvio para o melhor — vê-se logo qual a PO afetada |
+| **Autorização de corte extra** | Novo expander "✅ Autorizar desvios" nos Registos: marque o corte extra aprovado (checkbox + nota) e grave. O desvio autorizado **deixa de contar** no quadro (fica 🔵) e a projeção passa a ser líquida de extras autorizados |
+| **Registos com sinal claro** | Coluna **Sinal** (🟢/🟠/🔴/🔵 + %), fila de chips-resumo (dentro / atenção / desvio / autorizados) e filtro Todos / Só desvios / Só autorizados |
+| **Dashboard diz qual a PO** | Novo chip crítico nos alertas: "desvio consumo: …4380 +10.4% · …4383 +9.8% · …4377 (+15 mais)" — nomes as POs com desvio > 5% não autorizado |
+| **Consistência de estados** | PO com cortes registados fica automaticamente CUTTING (migração em cada arranque — as 38 POs com atividade aparecem no quadro) |
+
+**Sem re-seed**: base mantém-se `snt_cmt_v37.db` — as migrações correm no arranque e preservam tudo.
+
+## v3.7.2 — Clean Mode redesenhado a sério
+
+| O que mudou | Detalhe |
+|---|---|
+| **Sidebar temática** | O seletor CSS da sidebar estava obsoleto (classes antigas do Streamlit) — a sidebar ficava escura no modo clean. Agora usa `[data-testid="stSidebar"]`: clara no clean, escura no dark |
+| **Tabelas 100% tematizadas** | As 13 listagens deixaram `st.dataframe` (canvas, cores fixas do SO) e passaram a tabelas HTML próprias (`render_table`): header fixo, hover, números alinhados à direita com separador de milhares, linha TOTAL realçada, coluna Token discreta em monospace — sempre a condizer com o tema |
+| **Texto e labels invisíveis corrigidos** | Markdown, títulos e labels dos widgets herdavam a cor do SO (branco no fundo branco). Agora seguem sempre o tema |
+| **Inputs completos** | Selectbox, multiselect (tags incl.), número, texto, data e as listas popup tematizados; placeholders discretos |
+| **Radios em "pills"** | Círculo escondido; navegação da sidebar com pill ativa + barra lateral accent; seletor das Ferramentas com aspeto segmented control |
+| **Alertas nativos** | st.success/info/warning/error passam a cartão neutro legível nos dois temas |
+| **Limitação conhecida** | As 2 grelhas editáveis (Produção, Mapa de Consumos — `st.data_editor`) seguem o tema do sistema operativo; é uma restrição do componente |
+
+Sem re-seed: base mantém-se `snt_cmt_v37.db`.
 
 ## v3.7.1 — Correção do Movimentar + Movimentar englobado nas Ferramentas
 

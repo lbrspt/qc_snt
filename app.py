@@ -1,5 +1,5 @@
 """
-SNT CMT - Sistema de Stock & Produção v3.7.1
+SNT CMT - Sistema de Stock & Produção v3.8
 Dados reais CW29 2026
 v3.4:
 - Sistema de cor: cor sempre ligada à referência com ponto de cor visual em todo o site
@@ -19,6 +19,7 @@ import os
 from datetime import datetime, timedelta
 from io import BytesIO
 import re
+import html
 import json
 
 # ===================== PAGE CONFIG =====================
@@ -49,32 +50,40 @@ THEMES = {
         'SHADOW': 'rgba(0,0,0,0.3)',
     },
     'clean': {
-        'BG': 'linear-gradient(135deg, #f4f6fb 0%, #eaeef6 50%, #e3e9f3 100%)',
-        'TEXT': '#1e293b', 'MUTED': '#5b6b85', 'FAINT': '#94a3b8', 'ACCENT': '#2563eb',
-        'HEADER_BG': 'linear-gradient(135deg, #ffffff 0%, #e9eef8 100%)',
-        'CARD_BG': 'linear-gradient(145deg, #ffffff 0%, #f6f8fc 100%)',
-        'CARD_BG_SOFT': 'linear-gradient(145deg, #ffffff 0%, #f2f5fb 100%)',
-        'CARD_BORDER': 'rgba(15,23,42,0.08)',
+        'BG': 'linear-gradient(135deg, #f7f9fd 0%, #eef2f9 50%, #e7edf7 100%)',
+        'TEXT': '#0f172a', 'MUTED': '#52607a', 'FAINT': '#8b98ad', 'ACCENT': '#2563eb',
+        'HEADER_BG': 'linear-gradient(135deg, #ffffff 0%, #eef3fb 100%)',
+        'CARD_BG': 'linear-gradient(145deg, #ffffff 0%, #f7f9fd 100%)',
+        'CARD_BG_SOFT': 'linear-gradient(145deg, #ffffff 0%, #f3f6fc 100%)',
+        'CARD_BORDER': 'rgba(15,23,42,0.10)',
         'INPUT_BG': '#ffffff',
-        'SIDEBAR_BG': 'linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%)',
-        'TABLE_HEAD': '#e6edf9',
+        'SIDEBAR_BG': 'linear-gradient(180deg, #ffffff 0%, #f2f5fa 100%)',
+        'TABLE_HEAD': '#edf2fa',
         'TABLE_ROW': '#ffffff',
-        'TABLE_ROW_HOVER': '#f1f5fb',
-        'BAR_BG': 'rgba(15,23,42,0.06)',
-        'LINE': 'rgba(15,23,42,0.1)',
-        'BTN_SEC_BG': 'rgba(15,23,42,0.06)',
-        'SHADOW': 'rgba(15,23,42,0.08)',
+        'TABLE_ROW_HOVER': '#f2f6fc',
+        'BAR_BG': 'rgba(15,23,42,0.08)',
+        'LINE': 'rgba(15,23,42,0.12)',
+        'BTN_SEC_BG': 'rgba(15,23,42,0.05)',
+        'SHADOW': 'rgba(15,23,42,0.07)',
     },
 }
 
 CSS_TEMPLATE = """<style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
-    :root { --text: __TEXT__; --muted: __MUTED__; --faint: __FAINT__; --accent: __ACCENT__; }
+    :root { --text: __TEXT__; --muted: __MUTED__; --faint: __FAINT__; --accent: __ACCENT__; --line: __LINE__; --border: __CARD_BORDER__; }
 
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 
     .stApp { background: __BG__; }
+
+    /* ===== Texto base — markdown, títulos, captions ===== */
+    .stMarkdown { color: var(--text); }
+    .stMarkdown h1, .stMarkdown h2, .stMarkdown h3, .stMarkdown h4, .stMarkdown h5, .stMarkdown h6 { color: var(--text); }
+    .stMarkdown a { color: var(--accent); }
+    .stMarkdown code { background: __BAR_BG__; color: var(--text); padding: 2px 6px; border-radius: 5px; font-size: 11px; }
+    [data-testid="stCaptionContainer"] { color: var(--muted) !important; }
+    hr { border-color: __LINE__ !important; }
 
     /* Header */
     .main-header {
@@ -139,11 +148,35 @@ CSS_TEMPLATE = """<style>
     .alert-chip.info .alert-dot { background: #3b82f6; }
     .alert-chip.ok .alert-dot { background: #22c55e; }
 
-    /* Tables */
-    .stDataFrame { border-radius: 12px; overflow: hidden; }
-    .stDataFrame thead th { background: __TABLE_HEAD__ !important; color: var(--text) !important; font-weight: 600 !important; font-size: 12px !important; }
-    .stDataFrame tbody td { background: __TABLE_ROW__ !important; color: var(--text) !important; font-size: 12px !important; border-bottom: 1px solid __CARD_BORDER__ !important; }
-    .stDataFrame tbody tr:hover td { background: __TABLE_ROW_HOVER__ !important; }
+    /* ===== Tabelas HTML tematizadas (render_table) ===== */
+    .tbl-wrap {
+        overflow: auto; margin-bottom: 10px;
+        border: 1px solid __CARD_BORDER__; border-radius: 12px;
+        box-shadow: 0 4px 20px __SHADOW__;
+        background: __TABLE_ROW__;
+    }
+    .tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .tbl thead th {
+        position: sticky; top: 0; z-index: 2;
+        background: __TABLE_HEAD__; color: var(--text);
+        text-align: left; padding: 10px 14px;
+        font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px;
+        border-bottom: 1px solid __LINE__; white-space: nowrap;
+    }
+    .tbl tbody td {
+        padding: 8px 14px; white-space: nowrap;
+        border-bottom: 1px solid __CARD_BORDER__;
+        color: var(--text); background: __TABLE_ROW__;
+    }
+    .tbl tbody tr:last-child td { border-bottom: none; }
+    .tbl tbody tr:hover td { background: __TABLE_ROW_HOVER__; }
+    .tbl th.num, .tbl td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .tbl td.tok { font-family: 'SF Mono', 'Consolas', monospace; color: var(--faint); font-size: 11px; }
+    .tbl tr.tr-total td { font-weight: 700; background: __TABLE_HEAD__; border-top: 2px solid var(--accent); }
+    .tbl tr.tr-total:hover td { background: __TABLE_HEAD__; }
+
+    /* Editor nativo (data_editor) — raio/borda; cores internas seguem o tema do SO */
+    [data-testid="stDataFrame"] { border-radius: 12px; overflow: hidden; }
 
     /* Cards */
     .info-card {
@@ -155,10 +188,38 @@ CSS_TEMPLATE = """<style>
     .info-card-title { color: var(--text); font-size: 13px; font-weight: 600; margin-bottom: 8px; }
     .info-card-text { color: var(--muted); font-size: 12px; line-height: 1.6; }
 
-    /* Form styling */
-    .stSelectbox > div > div { background: __INPUT_BG__ !important; border-color: __CARD_BORDER__ !important; border-radius: 10px !important; }
-    .stNumberInput > div > div > div { background: __INPUT_BG__ !important; border-color: __CARD_BORDER__ !important; border-radius: 10px !important; }
-    .stTextInput > div > div > input { background: __INPUT_BG__ !important; border-color: __CARD_BORDER__ !important; border-radius: 10px !important; color: var(--text) !important; }
+    /* ===== Widgets: labels sempre legíveis ===== */
+    [data-testid="stWidgetLabel"] p { color: var(--text) !important; font-size: 13px !important; }
+    .stCheckbox label p { color: var(--text) !important; }
+
+    /* ===== Widgets: inputs ===== */
+    [data-baseweb="select"] > div { background: __INPUT_BG__ !important; border-color: __CARD_BORDER__ !important; border-radius: 10px !important; }
+    [data-baseweb="select"] span { color: var(--text) !important; }
+    [data-baseweb="select"] input { color: var(--text) !important; }
+    [data-baseweb="select"] svg { fill: var(--muted) !important; }
+    [data-baseweb="tag"] { background: rgba(37,99,235,0.14) !important; border-radius: 7px !important; }
+    [data-baseweb="tag"] span { color: var(--accent) !important; }
+    [data-baseweb="tag"] svg { fill: var(--accent) !important; }
+    .stTextInput input, .stNumberInput input, .stDateInput input {
+        background: __INPUT_BG__ !important; color: var(--text) !important;
+        border-color: __CARD_BORDER__ !important; border-radius: 10px !important;
+    }
+    .stTextArea textarea {
+        background: __INPUT_BG__ !important; color: var(--text) !important;
+        border-color: __CARD_BORDER__ !important; border-radius: 10px !important;
+    }
+    .stNumberInput button { background: __BTN_SEC_BG__ !important; color: var(--text) !important; border: none !important; }
+    input::placeholder, textarea::placeholder { color: var(--faint) !important; }
+
+    /* Dropdowns (listas popup) */
+    div[data-baseweb="popover"] ul[role="listbox"] { background: __INPUT_BG__ !important; border: 1px solid __CARD_BORDER__; border-radius: 10px; }
+    div[data-baseweb="popover"] li[role="option"] { color: var(--text) !important; background: __INPUT_BG__ !important; }
+    div[data-baseweb="popover"] li[role="option"]:hover,
+    div[data-baseweb="popover"] li[role="option"][aria-selected="true"] { background: __TABLE_ROW_HOVER__ !important; }
+
+    /* Alertas nativos (st.success/info/warning/error) */
+    [data-testid="stAlert"] { background: __CARD_BG_SOFT__ !important; border: 1px solid __CARD_BORDER__ !important; border-radius: 12px !important; }
+    [data-testid="stAlert"] p { color: var(--text) !important; }
 
     /* Buttons */
     .stButton > button {
@@ -170,13 +231,45 @@ CSS_TEMPLATE = """<style>
     }
     .stButton > button:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(37,99,235,0.4) !important; }
     .stButton > button[kind="secondary"] { background: __BTN_SEC_BG__ !important; color: var(--muted) !important; box-shadow: none !important; }
+    .stButton > button[kind="secondary"]:hover { color: var(--text) !important; }
+    .stDownloadButton > button { background: __BTN_SEC_BG__ !important; color: var(--muted) !important; border: 1px solid __CARD_BORDER__ !important; border-radius: 10px !important; box-shadow: none !important; }
+    .stDownloadButton > button:hover { color: var(--text) !important; border-color: __LINE__ !important; }
+
+    /* ===== Radios: pills sem círculo ===== */
+    [role="radiogroup"] label > div:first-of-type { display: none !important; }
+
+    /* Navegação na sidebar */
+    [data-testid="stSidebar"] .stRadio [role="radiogroup"] { gap: 2px; }
+    [data-testid="stSidebar"] .stRadio label {
+        color: var(--muted) !important; font-size: 13.5px !important;
+        padding: 9px 14px !important; border-radius: 9px !important;
+        border-left: 3px solid transparent !important; transition: all .15s !important;
+    }
+    [data-testid="stSidebar"] .stRadio label:hover { background: __BTN_SEC_BG__ !important; color: var(--text) !important; }
+    [data-testid="stSidebar"] .stRadio label:has(input:checked) {
+        background: rgba(37,99,235,0.14) !important; color: var(--accent) !important;
+        font-weight: 600 !important; border-left: 3px solid var(--accent) !important;
+    }
+
+    /* Radio na área principal (Ferramentas) — segmented control */
+    [data-testid="stAppViewContainer"] .stRadio [role="radiogroup"] {
+        gap: 6px; background: __CARD_BG_SOFT__; padding: 5px;
+        border-radius: 12px; border: 1px solid __CARD_BORDER__;
+        display: inline-flex; flex-wrap: wrap;
+    }
+    [data-testid="stAppViewContainer"] .stRadio [role="radiogroup"] label {
+        padding: 7px 18px !important; border-radius: 9px !important;
+        color: var(--muted) !important; font-size: 13px !important; transition: all .15s !important;
+    }
+    [data-testid="stAppViewContainer"] .stRadio [role="radiogroup"] label:hover { color: var(--text) !important; }
+    [data-testid="stAppViewContainer"] .stRadio [role="radiogroup"] label:has(input:checked) {
+        background: __INPUT_BG__ !important; color: var(--accent) !important;
+        font-weight: 600 !important; box-shadow: 0 2px 8px __SHADOW__ !important;
+    }
 
     /* Sidebar */
-    .css-1d391kg, .css-1lcbmhc { background: __SIDEBAR_BG__ !important; }
-    .stSidebar .stRadio > div { background: transparent !important; }
-    .stSidebar .stRadio label { color: var(--muted) !important; font-size: 13px !important; padding: 8px 12px !important; border-radius: 8px !important; transition: all 0.2s !important; }
-    .stSidebar .stRadio label:hover { background: __BTN_SEC_BG__ !important; color: var(--text) !important; }
-    .stSidebar .stRadio [aria-checked="true"] + label { background: rgba(37,99,235,0.2) !important; color: var(--accent) !important; font-weight: 600 !important; border-left: 3px solid #2563eb !important; }
+    [data-testid="stSidebar"], [data-testid="stSidebar"] > div:first-child { background: __SIDEBAR_BG__ !important; }
+    [data-testid="stSidebar"] .stMarkdown { color: var(--text); }
 
     /* Timeline */
     .timeline { position: relative; padding-left: 24px; }
@@ -239,9 +332,17 @@ CSS_TEMPLATE = """<style>
     .dev-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
 
     /* Tabs */
-    .stTabs [data-baseweb="tab-list"] { background: __CARD_BG_SOFT__ !important; border-radius: 12px !important; padding: 4px !important; gap: 4px !important; }
+    .stTabs [data-baseweb="tab-list"] { background: __CARD_BG_SOFT__ !important; border-radius: 12px !important; padding: 4px !important; gap: 4px !important; border: 1px solid __CARD_BORDER__ !important; }
     .stTabs [data-baseweb="tab"] { color: var(--muted) !important; font-size: 13px !important; border-radius: 8px !important; padding: 8px 16px !important; }
-    .stTabs [data-baseweb="tab"][aria-selected="true"] { background: rgba(37,99,235,0.2) !important; color: var(--accent) !important; font-weight: 600 !important; }
+    .stTabs [data-baseweb="tab"][aria-selected="true"] { background: __INPUT_BG__ !important; color: var(--accent) !important; font-weight: 600 !important; box-shadow: 0 2px 8px __SHADOW__ !important; }
+    .stTabs [data-baseweb="tab-highlight"] { display: none !important; }
+    .stTabs [data-baseweb="tab-border"] { display: none !important; }
+
+    /* Expander */
+    [data-testid="stExpander"] details { background: __CARD_BG_SOFT__; border: 1px solid __CARD_BORDER__ !important; border-radius: 12px !important; }
+    [data-testid="stExpander"] summary { color: var(--text) !important; }
+    [data-testid="stExpander"] summary:hover { color: var(--accent) !important; }
+    [data-testid="stExpander"] summary svg { fill: var(--muted) !important; }
 
     /* Badges */
     .badge {
@@ -253,6 +354,38 @@ CSS_TEMPLATE = """<style>
     .badge.inprocess { background: rgba(59,130,246,0.15); color: #3b82f6; }
     .badge.invoiced { background: rgba(100,116,139,0.15); color: var(--faint); }
 
+    /* PO running cards (Consumos > Em Curso) */
+    .po-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+    .po-card {
+        background: __CARD_BG_SOFT__;
+        border: 1px solid __CARD_BORDER__; border-radius: 14px; padding: 18px;
+        box-shadow: 0 4px 20px __SHADOW__;
+        transition: all 0.2s;
+    }
+    .po-card:hover { border-color: __LINE__; box-shadow: 0 8px 30px __SHADOW__; }
+    .po-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .po-num { color: var(--text); font-size: 13px; font-weight: 700; font-family: 'SF Mono', 'Consolas', monospace; }
+    .po-model { color: var(--muted); font-size: 12px; margin-bottom: 2px; }
+    .po-ref { color: var(--text); font-size: 12px; font-weight: 600; margin-bottom: 12px; }
+    .po-prog { height: 6px; background: __BAR_BG__; border-radius: 3px; overflow: hidden; margin-bottom: 4px; }
+    .po-prog-fill { height: 100%; background: linear-gradient(90deg, #2563eb, #60a5fa); border-radius: 3px; }
+    .po-prog-lbl { display: flex; justify-content: space-between; color: var(--faint); font-size: 11px; margin-bottom: 12px; }
+    .po-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
+    .po-k { display: block; color: var(--faint); font-size: 10px; text-transform: uppercase; letter-spacing: 0.3px; }
+    .po-v { display: block; color: var(--text); font-size: 14px; font-weight: 700; margin-top: 2px; }
+    .po-proj { font-size: 12px; color: #ef4444; }
+    .po-proj.ok { color: #22c55e; }
+    .po-auth { font-size: 11px; color: var(--accent); margin-top: 6px; }
+    .dev-chip { display: inline-block; padding: 3px 10px; border-radius: 7px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+    .dev-chip.ok { background: rgba(34,197,94,0.12); color: #22c55e; }
+    .dev-chip.warn { background: rgba(245,158,11,0.12); color: #f59e0b; }
+    .dev-chip.bad { background: rgba(239,68,68,0.12); color: #ef4444; }
+    .dev-chip.auth { background: rgba(59,130,246,0.12); color: #3b82f6; }
+    .dev-chip.na { background: rgba(100,116,139,0.12); color: var(--faint); }
+
+    /* Spinner */
+    .stSpinner > div { border-top-color: var(--accent) !important; }
+
     /* Hide Streamlit branding */
     #MainMenu { visibility: hidden; }
     footer { visibility: hidden; }
@@ -260,11 +393,12 @@ CSS_TEMPLATE = """<style>
 
     /* Scrollbar */
     ::-webkit-scrollbar { width: 8px; height: 8px; }
-    ::-webkit-scrollbar-track { background: __TABLE_ROW__; }
+    ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: __LINE__; border-radius: 4px; }
     ::-webkit-scrollbar-thumb:hover { background: var(--faint); }
 </style>
 """
+
 
 def inject_css():
     theme = st.session_state.get('theme', 'dark')
@@ -284,7 +418,8 @@ T = {
  'm_tools': '🛠 Ferramentas',
  'sb_system': 'Sistema de Stock & Produção', 'sb_nav': 'Navegar', 'sb_data': 'Dados: CW29 2026',
  'sb_theme': '🎨 Tema', 'sb_lang': '🌐 Idioma',
- 'h_sub': 'Sistema de Stock & Produção v3.7.1 | CW29 2026',
+ 'h_sub': 'Sistema de Stock & Produção v3.8 | CW29 2026',
+ 'no_data': 'Sem dados para mostrar.',
  'k_avail': 'STOCK DISPONÍVEL', 'k_avail_d': 'armazém + stock conf.',
  'k_process': 'EM PROCESSO (CONF.)', 'k_process_d': 'POs garment ativas',
  'k_incoming': 'A CHEGAR', 'k_incoming_d': 'POs tecido pendentes',
@@ -356,7 +491,21 @@ T = {
  'ok_status': '✅ PO {po} → {st}',
  'c_title': '📊 Consumos',
  'c_sub': 'mapa partilhado por modelo base — editável na grelha. desvio > 5% gera alerta.',
+ 'c_tab_running': '🏃 Em Curso',
  'c_tab_map': '📊 Mapa Visual', 'c_tab_real': '🧾 Registos Reais', 'c_tab_edit': '✏️ Editar Mapa',
+ 'c_running_sub': 'POs em corte comparadas com o standard — barra = progresso de corte · chip = desvio m/pc (já descontando extras autorizados) · projeção de metros extra no fim da PO.',
+ 'rn_none': 'Sem POs em corte neste momento.', 'rn_start': 'a iniciar', 'rn_nomap': 'sem mapa',
+ 'rn_used': 'usados', 'rn_mpp_now': 'm/pc atual', 'rn_mpp_std': 'm/pc std',
+ 'rn_proj_over': '⚠️ a este ritmo: <b>+{m} m</b> extra no fim da PO',
+ 'rn_proj_ok': '✓ dentro do standard',
+ 'rn_auth': 'corte extra autorizado: +{m} m',
+ 'rn_sum_ok': 'dentro', 'rn_sum_warn': 'atenção', 'rn_sum_bad': 'desvio', 'rn_sum_auth': 'c/ autorização',
+ 'c_signal': 'Sinal', 'c_filter': 'Mostrar', 'c_f_all': 'Todos', 'c_f_dev': 'Só desvios', 'c_f_auth': 'Só autorizados',
+ 'c_auth_title': '✅ Autorizar desvios (corte extra)',
+ 'c_auth_sub': 'desvios > 2% ou já autorizados. marque Autorizado quando um corte extra for aprovado — deixa de contar como desvio e fica 🔵 nos registos e no quadro Em Curso.',
+ 'c_auth_col': 'Autorizado', 'c_note_col': 'Nota autorização', 'c_authnote': 'Nota aut.',
+ 'b_save_auth': '💾 Guardar autorizações', 'ok_auth': '{n} autorizações atualizadas.',
+ 'al_dev': 'desvio consumo', 'al_dev_more': '+{n} mais',
  'lg_exp': 'esperado', 'lg_real': 'real médio', 'lg_dev': 'desvio > 5% = alerta',
  'c_nodata': 'sem dados', 'c_high': '⚠️ {n} consumos com desvio > 5%',
  'c_edit_sub': 'edita diretamente o consumo standard (m/pc esperado) — alterações gravam ao clicar em Guardar',
@@ -421,7 +570,8 @@ T = {
  'm_tools': '🛠 Tools',
  'sb_system': 'Fabric Stock & Production System', 'sb_nav': 'Navigate', 'sb_data': 'Data: CW29 2026',
  'sb_theme': '🎨 Theme', 'sb_lang': '🌐 Language',
- 'h_sub': 'Fabric Stock & Production System v3.7.1 | CW29 2026',
+ 'h_sub': 'Fabric Stock & Production System v3.8 | CW29 2026',
+ 'no_data': 'No data to display.',
  'k_avail': 'AVAILABLE STOCK', 'k_avail_d': 'warehouse + conf. stock',
  'k_process': 'IN PROCESS (CONF.)', 'k_process_d': 'active garment POs',
  'k_incoming': 'INCOMING', 'k_incoming_d': 'pending fabric POs',
@@ -493,7 +643,21 @@ T = {
  'ok_status': '✅ PO {po} → {st}',
  'c_title': '📊 Consumption',
  'c_sub': 'shared map by base model — editable in the grid. deviation > 5% triggers an alert.',
+ 'c_tab_running': '🏃 Running',
  'c_tab_map': '📊 Visual Map', 'c_tab_real': '🧾 Actual Records', 'c_tab_edit': '✏️ Edit Map',
+ 'c_running_sub': 'POs being cut vs standard — bar = cutting progress · chip = m/pc deviation (net of authorized extras) · projected extra metres at PO completion.',
+ 'rn_none': 'No POs being cut right now.', 'rn_start': 'starting', 'rn_nomap': 'no map',
+ 'rn_used': 'used', 'rn_mpp_now': 'actual m/pc', 'rn_mpp_std': 'std m/pc',
+ 'rn_proj_over': '⚠️ at this rate: <b>+{m} m</b> extra by PO end',
+ 'rn_proj_ok': '✓ within standard',
+ 'rn_auth': 'authorized extra cut: +{m} m',
+ 'rn_sum_ok': 'within', 'rn_sum_warn': 'watch', 'rn_sum_bad': 'deviation', 'rn_sum_auth': 'authorized',
+ 'c_signal': 'Signal', 'c_filter': 'Show', 'c_f_all': 'All', 'c_f_dev': 'Deviations only', 'c_f_auth': 'Authorized only',
+ 'c_auth_title': '✅ Authorize deviations (extra cut)',
+ 'c_auth_sub': 'deviations > 2% or already authorized. tick Authorized when an extra cut is approved — it stops counting as deviation and shows 🔵 in records and on the Running board.',
+ 'c_auth_col': 'Authorized', 'c_note_col': 'Authorization note', 'c_authnote': 'Auth. note',
+ 'b_save_auth': '💾 Save authorizations', 'ok_auth': '{n} authorizations updated.',
+ 'al_dev': 'consumption deviation', 'al_dev_more': '+{n} more',
  'lg_exp': 'expected', 'lg_real': 'actual average', 'lg_dev': 'deviation > 5% = alert',
  'c_nodata': 'no data', 'c_high': '⚠️ {n} consumptions with deviation > 5%',
  'c_edit_sub': 'edit the standard consumption directly (expected m/pc) — changes are saved when you click Save',
@@ -1346,7 +1510,9 @@ def init_db():
         deviation_pct REAL,
         date_cut TEXT,
         confeccionador TEXT,
-        notes TEXT
+        notes TEXT,
+        authorized INTEGER DEFAULT 0,
+        authorized_note TEXT
     );
     CREATE TABLE IF NOT EXISTS movements (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1368,6 +1534,17 @@ def init_db():
     existing_cols = [r[1] for r in cursor.fetchall()]
     if 'color' not in existing_cols:
         cursor.execute("ALTER TABLE movements ADD COLUMN color TEXT")
+
+    # Migração v3.8: autorização de desvios (corte extra) em consumptions
+    cursor.execute("PRAGMA table_info(consumptions)")
+    cons_cols = [r[1] for r in cursor.fetchall()]
+    if 'authorized' not in cons_cols:
+        cursor.execute("ALTER TABLE consumptions ADD COLUMN authorized INTEGER DEFAULT 0")
+        cursor.execute("ALTER TABLE consumptions ADD COLUMN authorized_note TEXT")
+
+    # Consistência v3.8: PO com cortes registados está em CUTTING
+    cursor.execute("""UPDATE production SET status = 'CUTTING' WHERE status = 'PENDING'
+                      AND po_number IN (SELECT DISTINCT po_garment FROM consumptions)""")
 
     cursor.execute("SELECT COUNT(*) FROM fabric_refs")
     if cursor.fetchone()[0] == 0:
@@ -1399,8 +1576,11 @@ def init_db():
 
         # Consumos reais CW28/29 com desvios
         for po, model, pcs, exp_m, act_m, dev, date, conf, notes in REAL_CONSUMPTIONS:
-            cursor.execute("INSERT INTO consumptions VALUES (NULL,?,?,?,?,?,?,?,?,?)",
+            cursor.execute("INSERT INTO consumptions (po_garment, model_name, pcs_cut, metres_expected, metres_actual, deviation_pct, date_cut, confeccionador, notes) VALUES (?,?,?,?,?,?,?,?,?)",
                          (po, model, pcs, exp_m, act_m, dev, date, conf, notes))
+
+        cursor.execute("""UPDATE production SET status = 'CUTTING' WHERE status = 'PENDING'
+                          AND po_number IN (SELECT DISTINCT po_garment FROM consumptions)""")
 
         # Derivar entradas de mapa para modelos sem standard (Ease, Nara, Motion, Serene…)
         # standard = esperado dos consumos reais | real = média produtiva real
@@ -1521,6 +1701,43 @@ def get_mpc(model_name, fabric_ref=None):
     return r0['m_per_pc_expected'], 'standard'
 
 
+
+DEV_OK, DEV_WARN = 2.0, 5.0  # limiares de desvio de consumo (%)
+
+def get_standard_mpc(model_name, fabric_ref=None):
+    """m/pc standard (predefinido) para modelo+tecido. Devolve float ou None."""
+    q = "SELECT model_name, fabric_ref, m_per_pc_expected FROM consumption_map"
+    params = []
+    if fabric_ref:
+        q += " WHERE fabric_ref = ?"
+        params.append(fabric_ref)
+    rows = query_to_df(q, params)
+    if rows.empty:
+        return None
+    model_lower = str(model_name).lower()
+    for _, r in rows.iterrows():
+        key = str(r['model_name']).lower().replace(' men plain', '').replace(' men checked', '').replace(' men striped', '')
+        if key and key in model_lower:
+            return r['m_per_pc_expected']
+    return rows.iloc[0]['m_per_pc_expected']
+
+def dev_signal(pct, authorized=0):
+    """Chip de sinal de desvio: (texto, classe css). Autorizado sobrepõe o sinal."""
+    if pct is None:
+        return ('—', 'na')
+    if authorized:
+        return (f"🔵 {pct:+.1f}%", 'auth')
+    if pct > DEV_WARN:
+        return (f"🔴 {pct:+.1f}%", 'bad')
+    if pct > DEV_OK:
+        return (f"🟠 {pct:+.1f}%", 'warn')
+    return (f"🟢 {pct:+.1f}%", 'ok')
+
+def short_po(po):
+    """'POAPS2000004404' -> '…4404' para chips compactos."""
+    s = str(po or '')
+    return '…' + s[-4:] if len(s) > 8 else s
+
 def safe_display_df(df):
     """Limpa DataFrame para evitar PyArrow segfault"""
     df = df.copy()
@@ -1529,6 +1746,46 @@ def safe_display_df(df):
         if df[col].dtype == 'object':
             df[col] = df[col].astype(str)
     return df
+
+
+def render_table(df, height=None):
+    """Tabela HTML tematizada (dark/clean) — substitui st.dataframe nas listagens."""
+    if df is None or df.empty:
+        st.markdown(f'<div class="info-card"><div class="info-card-text">{t("no_data")}</div></div>', unsafe_allow_html=True)
+        return
+    df = safe_display_df(df)
+    numeric_cols = {c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])}
+
+    def fmt(v, is_num):
+        if v == '' or v is None:
+            return ''
+        if is_num:
+            try:
+                return f"{float(v):,.2f}".rstrip('0').rstrip('.')
+            except (ValueError, TypeError):
+                return str(v)
+        return str(v)
+
+    thead = ''.join(
+        f'<th class="{"num" if c in numeric_cols else ""}">{html.escape(str(c))}</th>'
+        for c in df.columns)
+    rows = []
+    for _, r in df.iterrows():
+        is_total = str(r.iloc[0]).strip() == '— TOTAL —'
+        tds = []
+        for c in df.columns:
+            cls = []
+            if c in numeric_cols:
+                cls.append('num')
+            if str(c).strip().lower() == 'token':
+                cls.append('tok')
+            tds.append(f'<td class="{" ".join(cls)}">{html.escape(fmt(r[c], c in numeric_cols))}</td>')
+        rows.append(f'<tr class="{"tr-total" if is_total else ""}">{"".join(tds)}</tr>')
+    h_style = f' style="max-height:{int(height)}px;"' if height else ''
+    st.markdown(
+        f'<div class="tbl-wrap"{h_style}><table class="tbl"><thead><tr>{thead}</tr></thead>'
+        f'<tbody>{"".join(rows)}</tbody></table></div>',
+        unsafe_allow_html=True)
 
 def download_pair(df, base_name, excel_sheet='Dados', key_prefix='dl'):
     """Botões gémeos de download Excel + CSV."""
@@ -1598,6 +1855,14 @@ def render_dashboard():
         if not risk.empty:
             for _, row in risk.head(4).iterrows():
                 alerts_html += f'<div class="alert-chip info"><span class="alert-dot"></span>{t("al_risk")}: {row["ref_code"]} — {t("al_risk_txt")}</div>'
+        dev_pos = query_to_df("""SELECT po_garment, deviation_pct FROM consumptions
+                                 WHERE COALESCE(authorized, 0) = 0 AND deviation_pct > 5
+                                 ORDER BY deviation_pct DESC""")
+        if not dev_pos.empty:
+            top = ' · '.join(f"{short_po(r['po_garment'])} {r['deviation_pct']:+.1f}%"
+                             for _, r in dev_pos.head(3).iterrows())
+            more = f" ({t('al_dev_more', n=len(dev_pos) - 3)})" if len(dev_pos) > 3 else ''
+            alerts_html += f'<div class="alert-chip critical"><span class="alert-dot"></span>{t("al_dev")}: {top}{more}</div>'
         if not ok.empty:
             ok_refs = ', '.join(ok['ref_code'].head(3).tolist())
             alerts_html += f'<div class="alert-chip ok"><span class="alert-dot"></span>{ok_refs} — {t("al_bal")}</div>'
@@ -1621,7 +1886,7 @@ def render_dashboard():
         display_df = add_total_row(display_df)
         display_df = safe_display_df(display_df)
         display_df.columns = [t('c_supplier'), t('c_ref'), t('c_desc'), t('c_colors'), t('c_avail'), t('c_inproc'), t('c_net'), t('c_inc'), t('c_need'), t('c_plan'), t('c_status')]
-        st.dataframe(display_df, use_container_width=True, hide_index=True, height=400)
+        render_table(display_df, height=400)
 
         # Pipeline
         st.markdown(f'<div class="section-title">{t("d_pipe")}</div>', unsafe_allow_html=True)
@@ -1632,7 +1897,7 @@ def render_dashboard():
         if not prod_summary.empty:
             prod_summary = safe_display_df(prod_summary)
             prod_summary.columns = [t('c_conf'), t('c_activepo'), t('c_totpcs'), t('c_mexp')]
-            st.dataframe(prod_summary, use_container_width=True, hide_index=True)
+            render_table(prod_summary)
 
     except Exception as e:
         st.error(f"{t('d_err')}{e}")
@@ -1663,7 +1928,7 @@ def render_stock():
             summary = summary[['tipo', 'warehouse', 'AVAILABLE', 'IN_PROCESS', 'total', 'num_rolls']].sort_values('total', ascending=False)
             summary = safe_display_df(add_total_row(summary))
             summary.columns = ['', t('c_loc'), t('c_availm'), t('c_inprocm'), t('c_totalm'), t('c_rollslot')]
-            st.dataframe(summary, use_container_width=True, hide_index=True)
+            render_table(summary)
 
         # Filtros
         st.markdown(f'<div class="section-title">{t("s_detail")}</div>', unsafe_allow_html=True)
@@ -1693,7 +1958,7 @@ def render_stock():
         clean_df = safe_display_df(rolls_df)
         clean_df.columns = [t('c_supplier'), t('c_ref'), t('c_color'), t('c_metres'), t('c_lot'), t('c_wh'), t('c_status'), t('c_po'), t('c_notes'), t('c_token')]
         clean_df = apply_color_badges(clean_df, 'Cor')
-        st.dataframe(clean_df, use_container_width=True, hide_index=True, height=500)
+        render_table(clean_df, height=500)
 
         # --- Atribuir / corrigir cor de rolos ---
         n_sem_cor = query_to_df("SELECT COUNT(*) as c FROM fabric_rolls WHERE (color IS NULL OR color = '') AND status != 'INVOICED'").iloc[0]['c']
@@ -1779,7 +2044,7 @@ def render_incoming():
     if not incoming_df.empty:
         clean = safe_display_df(add_total_row(incoming_df))
         clean.columns = [t('c_supplier'), t('c_ref'), t('c_desc'), t('c_metres'), t('c_date_exp'), t('c_status'), t('c_tracking'), t('c_po2')]
-        st.dataframe(clean, use_container_width=True, hide_index=True, height=400)
+        render_table(clean, height=400)
 
         # Marcar como recebido → vai para Receção no menu Movimentar
         st.markdown(f'<div class="section-title">{t("i_mark")}</div>', unsafe_allow_html=True)
@@ -1899,7 +2164,7 @@ def render_production():
                     st.error(t('err_vals'))
                 else:
                     exp_m = round(pcs_cut * expected_mpc, 2) if expected_mpc else None
-                    execute_sql("INSERT INTO consumptions VALUES (NULL,?,?,?,?,?,?,?,?,?)",
+                    execute_sql("INSERT INTO consumptions (po_garment, model_name, pcs_cut, metres_expected, metres_actual, deviation_pct, date_cut, confeccionador, notes) VALUES (?,?,?,?,?,?,?,?,?)",
                                 (po_sel, po_row['model_name'], pcs_cut, exp_m, metres_real,
                                  round(dev_pct, 2) if dev_pct is not None else None,
                                  datetime.now().strftime('%Y-%m-%d'), po_row['confeccionador'],
@@ -1939,7 +2204,7 @@ def render_production():
             if not prod_df.empty:
                 clean = safe_display_df(add_total_row(prod_df))
                 clean.columns = [t('c_po2'), t('c_fsup'), t('c_fref'), t('c_model'), t('c_conf'), t('c_qty'), t('c_metres'), t('c_delivery'), t('c_state')]
-                st.dataframe(clean, use_container_width=True, hide_index=True, height=450)
+                render_table(clean, height=450)
             else:
                 st.info(t('p_no_inv'))
         else:
@@ -2025,8 +2290,152 @@ def render_consumos():
     st.markdown(f'<div class="section-title">{t("c_title")}</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="section-subtitle">{t("c_sub")}</div>', unsafe_allow_html=True)
 
-    tab_map, tab_real, tab_edit = st.tabs([t('c_tab_map'), t('c_tab_real'), t('c_tab_edit')])
+    tab_run, tab_real, tab_map, tab_edit = st.tabs([t('c_tab_running'), t('c_tab_real'), t('c_tab_map'), t('c_tab_edit')])
 
+    # ---------- TAB EM CURSO (quadro visual de POs) ----------
+    with tab_run:
+        st.markdown(f'<div class="section-subtitle">{t("c_running_sub")}</div>', unsafe_allow_html=True)
+        run_df = query_to_df("""
+            SELECT p.po_number, p.model_name, p.confeccionador, p.po_qty, p.fabric_ref,
+                   COALESCE(SUM(c.pcs_cut), 0) AS pcs_cut,
+                   COALESCE(SUM(c.metres_actual), 0) AS m_used,
+                   COALESCE(SUM(CASE WHEN c.authorized = 1 THEN MAX(0, c.metres_actual - COALESCE(c.metres_expected, 0)) ELSE 0 END), 0) AS auth_extra,
+                   COALESCE(SUM(CASE WHEN c.authorized = 1 THEN 1 ELSE 0 END), 0) AS n_auth
+            FROM production p
+            LEFT JOIN consumptions c ON c.po_garment = p.po_number
+            WHERE p.status = 'CUTTING'
+            GROUP BY p.po_number, p.model_name, p.confeccionador, p.po_qty, p.fabric_ref
+            ORDER BY p.po_number DESC
+        """)
+        if run_df.empty:
+            st.info(t('rn_none'))
+        else:
+            cards = []
+            n_ok = n_warn = n_bad = n_authd = n_start = 0
+            for _, r in run_df.iterrows():
+                std = get_standard_mpc(r['model_name'], r['fabric_ref'])
+                pcs_cut, po_qty = float(r['pcs_cut']), float(r['po_qty'])
+                auth_extra, n_a = float(r['auth_extra']), int(r['n_auth'])
+                adj_used = float(r['m_used']) - auth_extra
+                if pcs_cut > 0 and std:
+                    mpp = adj_used / pcs_cut
+                    dev = (mpp - std) / std * 100
+                    chip_txt, chip_cls = dev_signal(dev)
+                elif pcs_cut > 0:
+                    mpp, dev = adj_used / pcs_cut, None
+                    chip_txt, chip_cls = t('rn_nomap'), 'na'
+                else:
+                    mpp, dev = None, None
+                    chip_txt, chip_cls = t('rn_start'), 'na'
+                if n_a > 0:
+                    n_authd += 1
+                if chip_cls == 'ok':
+                    n_ok += 1
+                elif chip_cls == 'warn':
+                    n_warn += 1
+                elif chip_cls == 'bad':
+                    n_bad += 1
+                else:
+                    n_start += 1
+                prog = min(100.0, pcs_cut / po_qty * 100) if po_qty else 0.0
+                cor_row = query_to_df("SELECT color FROM fabric_rolls WHERE po_garment = ? AND color IS NOT NULL AND color != '' LIMIT 1", (r['po_number'],))
+                if cor_row.empty:
+                    cor_row = query_to_df("SELECT color FROM fabric_rolls WHERE ref_code = ? AND color IS NOT NULL AND color != '' GROUP BY color ORDER BY COUNT(*) DESC LIMIT 1", (r['fabric_ref'],))
+                cor = cor_row.iloc[0]['color'] if not cor_row.empty else ''
+                if dev is not None and dev > DEV_OK and std:
+                    extra = (mpp - std) * po_qty
+                    proj_html = f'<div class="po-proj">{t("rn_proj_over", m=f"{extra:,.0f}")}</div>'
+                elif dev is not None:
+                    proj_html = f'<div class="po-proj ok">{t("rn_proj_ok")}</div>'
+                else:
+                    proj_html = ''
+                auth_html = f'<div class="po-auth">🔵 {t("rn_auth", m=f"{auth_extra:,.0f}")}</div>' if n_a > 0 else ''
+                ref_lbl = f"{color_dot(cor)} {r['fabric_ref']}" + (f" · {cor}" if cor else '')
+                cards.append((-(dev if dev is not None else -999), f"""
+                <div class="po-card">
+                    <div class="po-head"><span class="po-num">{r['po_number']}</span><span class="dev-chip {chip_cls}">{chip_txt}</span></div>
+                    <div class="po-model">{r['model_name']} · {r['confeccionador']}</div>
+                    <div class="po-ref">{ref_lbl}</div>
+                    <div class="po-prog"><div class="po-prog-fill" style="width:{prog:.0f}%"></div></div>
+                    <div class="po-prog-lbl"><span>{pcs_cut:,.0f} / {po_qty:,.0f} pcs</span><span>{prog:.0f}%</span></div>
+                    <div class="po-stats">
+                        <div><span class="po-k">{t('rn_used')}</span><span class="po-v">{adj_used:,.0f} m</span></div>
+                        <div><span class="po-k">{t('rn_mpp_now')}</span><span class="po-v">{f"{mpp:.3f}" if mpp is not None else '—'}</span></div>
+                        <div><span class="po-k">{t('rn_mpp_std')}</span><span class="po-v">{f"{std:.2f}" if std else '—'}</span></div>
+                    </div>
+                    {proj_html}{auth_html}
+                </div>"""))
+            st.markdown(f"""<div class="alert-bar">
+                <div class="alert-chip ok"><span class="alert-dot"></span>{n_ok} {t('rn_sum_ok')}</div>
+                <div class="alert-chip warning"><span class="alert-dot"></span>{n_warn} {t('rn_sum_warn')}</div>
+                <div class="alert-chip critical"><span class="alert-dot"></span>{n_bad} {t('rn_sum_bad')}</div>
+                <div class="alert-chip info"><span class="alert-dot"></span>{n_authd} {t('rn_sum_auth')}</div>
+            </div>""", unsafe_allow_html=True)
+            cards.sort(key=lambda x: x[0])
+            st.markdown('<div class="po-grid">' + ''.join(h for _, h in cards) + '</div>', unsafe_allow_html=True)
+
+    # ---------- TAB REGISTOS ----------
+    with tab_real:
+        cons_df = query_to_df("SELECT * FROM consumptions ORDER BY date_cut DESC, id DESC")
+        if not cons_df.empty:
+            cons_df['authorized'] = cons_df['authorized'].fillna(0).astype(int)
+            devv = cons_df['deviation_pct'].fillna(0)
+            auth_mask = cons_df['authorized'] == 1
+            n_bad_r = int((~auth_mask & (devv > DEV_WARN)).sum())
+            n_warn_r = int((~auth_mask & (devv > DEV_OK) & (devv <= DEV_WARN)).sum())
+            n_auth_r = int(auth_mask.sum())
+            n_ok_r = len(cons_df) - n_bad_r - n_warn_r - n_auth_r
+            st.markdown(f"""<div class="alert-bar">
+                <div class="alert-chip ok"><span class="alert-dot"></span>{n_ok_r} {t('rn_sum_ok')}</div>
+                <div class="alert-chip warning"><span class="alert-dot"></span>{n_warn_r} {t('rn_sum_warn')}</div>
+                <div class="alert-chip critical"><span class="alert-dot"></span>{n_bad_r} {t('rn_sum_bad')}</div>
+                <div class="alert-chip info"><span class="alert-dot"></span>{n_auth_r} {t('rn_sum_auth')}</div>
+            </div>""", unsafe_allow_html=True)
+
+            flt = st.selectbox(t('c_filter'), [t('c_f_all'), t('c_f_dev'), t('c_f_auth')], key='cons_filter')
+            view = cons_df.copy()
+            if flt == t('c_f_dev'):
+                view = view[~auth_mask & (devv > DEV_OK)]
+            elif flt == t('c_f_auth'):
+                view = view[auth_mask]
+            view['Sinal'] = [dev_signal(d, a)[0] for d, a in zip(view['deviation_pct'].fillna(0), view['authorized'])]
+            disp = view[['id', 'po_garment', 'model_name', 'pcs_cut', 'metres_expected', 'metres_actual',
+                         'deviation_pct', 'Sinal', 'date_cut', 'confeccionador', 'notes', 'authorized_note']]
+            disp = add_total_row(disp, exclude=['id', 'deviation_pct', 'Sinal'])
+            disp.columns = ['ID', t('c_po'), t('c_model'), t('c_pcs'), t('c_mexp'), t('c_mreal'), t('c_dev'),
+                            t('c_signal'), t('c_cutdate'), t('c_conf'), t('c_notes'), t('c_authnote')]
+            render_table(disp, height=400)
+
+            with st.expander(t('c_auth_title')):
+                st.markdown(f'<div class="section-subtitle">{t("c_auth_sub")}</div>', unsafe_allow_html=True)
+                auth_df = cons_df[(cons_df['deviation_pct'].fillna(0) > DEV_OK) | (cons_df['authorized'] == 1)][
+                    ['id', 'po_garment', 'model_name', 'deviation_pct', 'authorized', 'authorized_note']].copy()
+                auth_df['authorized'] = auth_df['authorized'].astype(bool)
+                if auth_df.empty:
+                    st.info(t('c_none'))
+                else:
+                    edited = st.data_editor(
+                        auth_df, use_container_width=True, hide_index=True,
+                        column_config={
+                            "id": st.column_config.NumberColumn("ID", disabled=True),
+                            "po_garment": st.column_config.TextColumn(t('c_po'), disabled=True),
+                            "model_name": st.column_config.TextColumn(t('c_model'), disabled=True),
+                            "deviation_pct": st.column_config.NumberColumn(t('c_dev'), format="%.1f%%", disabled=True),
+                            "authorized": st.column_config.CheckboxColumn(t('c_auth_col')),
+                            "authorized_note": st.column_config.TextColumn(t('c_note_col')),
+                        },
+                        key="auth_editor")
+                    if st.button(t('b_save_auth'), key="auth_save"):
+                        for _, r in edited.iterrows():
+                            execute_sql("UPDATE consumptions SET authorized = ?, authorized_note = ? WHERE id = ?",
+                                        (1 if r['authorized'] else 0, r['authorized_note'] or None, int(r['id'])))
+                        st.success(t('ok_auth', n=len(edited)))
+                        st.rerun()
+            download_pair(cons_df, f"consumos_{datetime.now().strftime('%Y%m%d')}", 'Consumos', 'cons_dl')
+        else:
+            st.info(t('c_none'))
+
+    # ---------- TAB MAPA VISUAL ----------
     with tab_map:
         cm_df = query_to_df("""
             SELECT cm.model_name, cm.fabric_ref, cm.m_per_pc_expected, cm.m_per_pc_actual
@@ -2062,19 +2471,7 @@ def render_consumos():
                 </div>"""
             st.markdown(rows_html, unsafe_allow_html=True)
 
-    with tab_real:
-        cons_df = query_to_df("SELECT * FROM consumptions ORDER BY date_cut DESC, id DESC")
-        if not cons_df.empty:
-            clean = safe_display_df(add_total_row(cons_df, exclude=['id', 'deviation_pct']))
-            clean.columns = ['ID', t('c_po'), t('c_model'), t('c_pcs'), t('c_mexp'), t('c_mreal'), t('c_dev'), t('c_cutdate'), t('c_conf'), t('c_notes')]
-            st.dataframe(clean, use_container_width=True, hide_index=True, height=400)
-            n_high = cons_df[cons_df['deviation_pct'].fillna(0).abs() > 5].shape[0]
-            if n_high:
-                st.warning(t('c_high', n=n_high))
-            download_pair(cons_df, f"consumos_{datetime.now().strftime('%Y%m%d')}", 'Consumos', 'cons_dl')
-        else:
-            st.info(t('c_none'))
-
+    # ---------- TAB EDITAR MAPA ----------
     with tab_edit:
         st.markdown(f'<div class="section-subtitle">{t("c_edit_sub")}</div>', unsafe_allow_html=True)
         cm_edit = query_to_df("SELECT model_name, fabric_ref, m_per_pc_expected, m_per_pc_actual FROM consumption_map ORDER BY fabric_ref, model_name")
@@ -2354,7 +2751,7 @@ def render_movement():
         clean = safe_display_df(add_total_row(hist_df))
         clean.columns = [t('c_dt'), t('c_type'), t('c_from'), t('c_to'), t('c_ref'), t('c_color'), t('c_metres'), 'PO', t('c_notes'), t('c_token')]
         clean = apply_color_badges(clean, 'Cor')
-        st.dataframe(clean, use_container_width=True, hide_index=True)
+        render_table(clean)
     else:
         st.info(t('mv_none'))
 
@@ -2399,17 +2796,17 @@ def render_trace():
                 clean = safe_display_df(add_total_row(hist_df))
                 clean.columns = [t('c_dt'), t('c_type'), t('c_from'), t('c_to'), t('c_ref'), t('c_color'), t('c_metres'), 'PO', t('c_notes'), t('c_token')]
                 clean = apply_color_badges(clean, 'Cor')
-                st.dataframe(clean, use_container_width=True, hide_index=True, height=250)
+                render_table(clean, height=250)
         else:
             po_df = query_to_df("SELECT * FROM production WHERE po_number = ?", (search,))
             if not po_df.empty:
                 st.markdown(f'<div class="section-title">PO: {search}</div>', unsafe_allow_html=True)
-                st.dataframe(safe_display_df(po_df), use_container_width=True, hide_index=True)
+                render_table(safe_display_df(po_df))
 
                 cons_df = query_to_df("SELECT * FROM consumptions WHERE po_garment = ?", (search,))
                 if not cons_df.empty:
                     st.markdown(f'<div class="section-title">{t("tr_cons")}</div>', unsafe_allow_html=True)
-                    st.dataframe(safe_display_df(add_total_row(cons_df, exclude=['id', 'deviation_pct'])), use_container_width=True, hide_index=True)
+                    render_table(safe_display_df(add_total_row(cons_df, exclude=['id', 'deviation_pct'])))
 
                 roll_df = query_to_df("""SELECT fr.supplier, r.ref_code, r.color, r.metres, r.warehouse, r.status, r.token
                                          FROM fabric_rolls r LEFT JOIN fabric_refs fr ON r.ref_code = fr.ref_code
@@ -2419,7 +2816,7 @@ def render_trace():
                     clean = safe_display_df(add_total_row(roll_df))
                     clean.columns = [t('c_supplier'), t('c_ref'), t('c_color'), t('c_metres'), t('c_loc'), t('c_status'), t('c_token')]
                     clean = apply_color_badges(clean, 'Cor')
-                    st.dataframe(clean, use_container_width=True, hide_index=True)
+                    render_table(clean)
 
                 mov_df = query_to_df("SELECT date_time, move_type, from_location, to_location, ref_code, color, metres, notes, token FROM movements WHERE po_garment = ? ORDER BY date_time DESC", (search,))
                 if not mov_df.empty:
@@ -2427,7 +2824,7 @@ def render_trace():
                     clean = safe_display_df(add_total_row(mov_df))
                     clean.columns = [t('c_dt'), t('c_type'), t('c_from'), t('c_to'), t('c_ref'), t('c_color'), t('c_metres'), t('c_notes'), t('c_token')]
                     clean = apply_color_badges(clean, 'Cor')
-                    st.dataframe(clean, use_container_width=True, hide_index=True)
+                    render_table(clean)
             else:
                 st.warning(t('tr_notfound'))
 
@@ -2495,7 +2892,7 @@ def render_tools():
 # ===================== MAIN =====================
 def main():
     st.sidebar.markdown(f"""
-    <div style="padding:16px 0 24px 0;text-align:center;border-bottom:1px solid rgba(255,255,255,0.06);margin-bottom:16px;">
+    <div style="padding:16px 0 24px 0;text-align:center;border-bottom:1px solid var(--line);margin-bottom:16px;">
         <div style="font-size:28px;margin-bottom:4px;">🏭</div>
         <div style="color:var(--text);font-size:16px;font-weight:700;">SNT CMT</div>
         <div style="color:var(--faint);font-size:11px;">{t('sb_system')}</div>
@@ -2529,8 +2926,8 @@ def main():
 
     st.sidebar.markdown(f"""
     <div style="position:fixed;bottom:20px;left:20px;right:20px;">
-        <div style="border-top:1px solid rgba(255,255,255,0.06);padding-top:12px;color:var(--faint);font-size:11px;text-align:center;">
-            v3.7.1 | {t('sb_data')}<br>{datetime.now().strftime('%Y-%m-%d')}<br>
+        <div style="border-top:1px solid var(--line);padding-top:12px;color:var(--faint);font-size:11px;text-align:center;">
+            v3.8 | {t('sb_data')}<br>{datetime.now().strftime('%Y-%m-%d')}<br>
             <span style="color:#3b82f6;font-weight:600;">SNT CMT</span>
         </div>
     </div>
