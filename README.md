@@ -1,7 +1,31 @@
-# SNT CMT — Sistema de Stock & Produção v3.6
+# SNT CMT — Sistema de Stock & Produção v3.7.1
 
 Sistema de gestão de stock de tecidos, encomendas garment e consumos para a SNT.
 Dados reais carregados: CW29 2026.
+
+## v3.7.1 — Correção do Movimentar + Movimentar englobado nas Ferramentas
+
+| O que mudou | Detalhe |
+|---|---|
+| **Erro no Movimentar corrigido** | `UnboundLocalError: t` — uma variável de ciclo `for t in ...` escondia a função de tradução `t()` dentro do menu Movimentar; renomeada (e prevenção do mesmo padrão no Stock) |
+| **"Movimentar" dentro das Ferramentas** | Menu lateral com 6 entradas; dentro de Ferramentas: seletor horizontal 🚚 Movimentar / 🔍 Rastreio / 📤 Exportar |
+| **Sem re-seed** | Base mantém-se `snt_cmt_v37.db` — atualizar não perde dados |
+
+Nota técnica: usa-se um seletor horizontal porque o Streamlit não suporta separadores (tabs) dentro de separadores — e o Movimentar já tem os seus 5 separadores internos.
+
+## v3.7 — 7 melhorias pedidas
+
+| O que mudou | Detalhe |
+|---|---|
+| **Consumo com média real** | `get_mpc()` usa sempre a média produtiva real quando existe; senão o standard. Badge ⚡ real / 📐 standard no cálculo. O mapa deriva entradas das produções reais |
+| **Menu Ferramentas** | Rastreio e Exportar unificados |
+| **PT / EN** | Seletor de idioma na barra lateral; toda a interface traduzida |
+| **Dark / Clean mode** | Seletor de tema na barra lateral (escuro por omissão) |
+| **Movimentar por remessa** | Seleção rápida de todos os rolos da mesma remessa+cor de uma vez |
+| **Stock: cabeçalho compacto** | Tabela-resumo por local (Available / In Process / Total + rolos) com linha TOTAL, em vez dos cartões grandes |
+| **AVAILABLE vs IN_PROCESS (audit CW29)** | Colunas "(stock)" passam a AVAILABLE: Tyrrell 3.002,01m disponível; Fabrijeans/Costa 34.943,42m disponível + 14.988,49m em processo |
+
+⚠️ A v3.7 usava base nova (`snt_cmt_v37.db`).
 
 ## v3.6 — Stock = Fabric Audit CW29 (ao cêntimo) + Totais em todas as tabelas
 

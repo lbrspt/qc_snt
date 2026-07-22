@@ -1,5 +1,5 @@
 """
-SNT CMT - Sistema de Stock & Produção v3.7
+SNT CMT - Sistema de Stock & Produção v3.7.1
 Dados reais CW29 2026
 v3.4:
 - Sistema de cor: cor sempre ligada à referência com ponto de cor visual em todo o site
@@ -284,7 +284,7 @@ T = {
  'm_tools': '🛠 Ferramentas',
  'sb_system': 'Sistema de Stock & Produção', 'sb_nav': 'Navegar', 'sb_data': 'Dados: CW29 2026',
  'sb_theme': '🎨 Tema', 'sb_lang': '🌐 Idioma',
- 'h_sub': 'Sistema de Stock & Produção v3.7 | CW29 2026',
+ 'h_sub': 'Sistema de Stock & Produção v3.7.1 | CW29 2026',
  'k_avail': 'STOCK DISPONÍVEL', 'k_avail_d': 'armazém + stock conf.',
  'k_process': 'EM PROCESSO (CONF.)', 'k_process_d': 'POs garment ativas',
  'k_incoming': 'A CHEGAR', 'k_incoming_d': 'POs tecido pendentes',
@@ -421,7 +421,7 @@ T = {
  'm_tools': '🛠 Tools',
  'sb_system': 'Fabric Stock & Production System', 'sb_nav': 'Navigate', 'sb_data': 'Data: CW29 2026',
  'sb_theme': '🎨 Theme', 'sb_lang': '🌐 Language',
- 'h_sub': 'Fabric Stock & Production System v3.7 | CW29 2026',
+ 'h_sub': 'Fabric Stock & Production System v3.7.1 | CW29 2026',
  'k_avail': 'AVAILABLE STOCK', 'k_avail_d': 'warehouse + conf. stock',
  'k_process': 'IN PROCESS (CONF.)', 'k_process_d': 'active garment POs',
  'k_incoming': 'INCOMING', 'k_incoming_d': 'pending fabric POs',
@@ -1752,7 +1752,7 @@ def render_stock():
                         st.error(t('err_pick_color'))
                     else:
                         ac_color = str(ac_color).strip()
-                        execute_many("UPDATE fabric_rolls SET color = ? WHERE token = ?", [(ac_color, t) for t in targets])
+                        execute_many("UPDATE fabric_rolls SET color = ? WHERE token = ?", [(ac_color, tok) for tok in targets])
                         log_movement('EDIT', None, ac_wh if ac_wh != 'Todos' else None, None, ac_ref, None, None,
                                      f'Cor atribuída → {ac_color} ({len(targets)} rolos)', ac_color)
                         st.success(f"✅ {color_badge(ac_color)} {t('ok_color', n=len(targets), ref=ac_ref)}")
@@ -2158,12 +2158,12 @@ def render_movement():
                 if not sel_tokens:
                     st.error(t('err_m1'))
                 else:
-                    for t in sel_tokens:
+                    for tok in sel_tokens:
                         execute_sql("UPDATE fabric_rolls SET warehouse = ?, status = ?, date_last_move = ? WHERE token = ?",
-                                    (m1_to, m1_status, datetime.now().isoformat(), t))
-                        m_val = rolls_avail[rolls_avail['token'] == t].iloc[0]['metres']
-                        c_val = rolls_avail[rolls_avail['token'] == t].iloc[0]['color']
-                        log_movement('TRANSFER', t, m1_wh, m1_to, m1_ref, m_val, None, f'Rolo movido ({m1_status})', c_val)
+                                    (m1_to, m1_status, datetime.now().isoformat(), tok))
+                        m_val = rolls_avail[rolls_avail['token'] == tok].iloc[0]['metres']
+                        c_val = rolls_avail[rolls_avail['token'] == tok].iloc[0]['color']
+                        log_movement('TRANSFER', tok, m1_wh, m1_to, m1_ref, m_val, None, f'Rolo movido ({m1_status})', c_val)
                     st.success(t('ok_m1', n=len(sel_tokens), m=f"{total_sel:,.1f}", a=m1_wh, b=m1_to))
                     st.rerun()
 
@@ -2481,10 +2481,14 @@ def render_export():
 
 # ===================== UI: FERRAMENTAS =====================
 def render_tools():
-    tab_tr, tab_ex = st.tabs([t('tr_title'), t('ex_title')])
-    with tab_tr:
+    tool = st.radio(t('m_tools'), [t('m_movement'), t('tr_title'), t('ex_title')],
+                    horizontal=True, key='tools_sel', label_visibility='collapsed')
+    st.markdown("<div style='margin-bottom:18px;'></div>", unsafe_allow_html=True)
+    if tool == t('m_movement'):
+        render_movement()
+    elif tool == t('tr_title'):
         render_trace()
-    with tab_ex:
+    else:
         render_export()
 
 
@@ -2518,7 +2522,6 @@ def main():
         t('m_incoming'): render_incoming,
         t('m_production'): render_production,
         t('m_consumos'): render_consumos,
-        t('m_movement'): render_movement,
         t('m_tools'): render_tools,
     }
 
@@ -2527,7 +2530,7 @@ def main():
     st.sidebar.markdown(f"""
     <div style="position:fixed;bottom:20px;left:20px;right:20px;">
         <div style="border-top:1px solid rgba(255,255,255,0.06);padding-top:12px;color:var(--faint);font-size:11px;text-align:center;">
-            v3.7 | {t('sb_data')}<br>{datetime.now().strftime('%Y-%m-%d')}<br>
+            v3.7.1 | {t('sb_data')}<br>{datetime.now().strftime('%Y-%m-%d')}<br>
             <span style="color:#3b82f6;font-weight:600;">SNT CMT</span>
         </div>
     </div>
