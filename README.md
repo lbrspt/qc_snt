@@ -1,7 +1,44 @@
-# SNT CMT — Sistema de Stock & Produção v3.8
+# SNT CMT — Sistema de Stock & Produção v3.10
 
 Sistema de gestão de stock de tecidos, encomendas garment e consumos para a SNT.
 Dados reais carregados: CW29 2026.
+
+## v3.10 — Packing lists: rolos individuais em lote para o armazém
+
+| O que mudou | Detalhe |
+|---|---|
+| **📤 Carregar packing list** | Em Ferramentas → Movimentar → 📥 Receção (junto ao registo manual): upload Excel/CSV, uma linha por rolo. Colunas flexíveis: ref_code, metres · opcionais roll, color, lot, po_number + template CSV |
+| **Armazém de destino** | Seletor XBS/Riopele por carregamento — todos os rolos do ficheiro entram AVAILABLE nesse armazém |
+| **Tokens automáticos** | R-{REF}-{NNN} gerados em lote, continuando a numeração existente por ref (sem colisões); nº do rolo do fornecedor e PO ficam nas notas para rastreio |
+| **Validação com reconciliação** | ❌ ref/metros em falta · ⚠️ ref nova (regista no catálogo), cor em falta/desconhecida, rolo repetido no ficheiro, sem lote, PO inexistente/já recebida, e **packing vs encomenda**: "PO POTEC001: packing 131,7m vs encomenda 200,0m (Δ -68,3m)" |
+| **PO ligada → receção automática** | Se a packing traz po_number de uma encomenda EXPECTED/IN_TRANSIT, ao importar fica RECEIVED (com movimento ARRIVAL) |
+| **Sumário ref+cor** | Antes de importar: rolos e metros por ref+color com linha TOTAL, além da pré-visualização linha a linha |
+
+Sem re-seed: base mantém-se `snt_cmt_v37.db`.
+
+## v3.9 — Carga em massa via Excel/CSV com validação
+
+| O que mudou | Detalhe |
+|---|---|
+| **📤 Carregar POs** (Produção) | Novo separador: upload Excel/CSV de encomendas garment. Colunas flexíveis (aceita sinónimos PT/EN: PO/po_number, Modelo/model_name, Conf, Qty, Ref, Cor, Metros, Data, Status) + template CSV para download |
+| **📤 Carregar encomendas** (A Chegar) | Expander: upload Excel/CSV de encomendas de tecido (po_number, supplier, ref_code, total_metres + opcionais) |
+| **Relatório de validação** | Antes de importar: chips com X válidas / Y avisos / Z erros e tabela linha a linha (❌ erro exclui a linha · ⚠️ aviso com auto-correção). Nada entra sem clicar "✅ Importar N linhas" |
+| **Auto-correções** | Ref nova → regista no catálogo ao importar ⚠️ · metros em falta → qty × m/pc standard ⚠️ · datas dd/mm/aaaa → ISO ⚠️ · números PT (1.234,56) e EN · cor desconhecida para a ref → aviso |
+| **Erros detetados** | PO em falta/duplicada (no ficheiro ou na BD), qty/metros inválidos, modelo/confeccionador/fornecedor/ref em falta |
+| **Idempotente** | Re-carregar o mesmo ficheiro mostra as linhas já importadas como duplicadas — sem risco de duplicar |
+
+Sem re-seed: base mantém-se `snt_cmt_v37.db`.
+
+## v3.8.1 — Registar novas encomendas de tecido
+
+| O que mudou | Detalhe |
+|---|---|
+| **Formulário "➕ Nova encomenda de tecido"** | No menu 🚢 A Chegar: PO, fornecedor (com opção "➕ Novo…"), ref (com "➕ Novo…" que regista a ref no catálogo), metros, data prevista, estado (EXPECTED/IN_TRANSIT) e tracking. Valida duplicados e campos obrigatórios |
+| **Fluxo completo** | Registar encomenda (A Chegar) → marcar chegada → registar rolos na Receção (Ferramentas → Movimentar) → stock AVAILABLE. A encomenda entra logo no KPI "a chegar" e fica registada nos movimentos (ORDER) |
+
+Nota: encomendas garment (POs) lançam-se na Produção → ✏️ Tabela Editável (linha nova no fim da grelha → Guardar).
+
+Sem re-seed: base mantém-se `snt_cmt_v37.db`.
 
 ## v3.8 — Quadro "Em Curso" + autorização de cortes extra
 

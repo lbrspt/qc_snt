@@ -1,5 +1,5 @@
 """
-SNT CMT - Sistema de Stock & Produção v3.8
+SNT CMT - Sistema de Stock & Produção v3.10
 Dados reais CW29 2026
 v3.4:
 - Sistema de cor: cor sempre ligada à referência com ponto de cor visual em todo o site
@@ -418,7 +418,7 @@ T = {
  'm_tools': '🛠 Ferramentas',
  'sb_system': 'Sistema de Stock & Produção', 'sb_nav': 'Navegar', 'sb_data': 'Dados: CW29 2026',
  'sb_theme': '🎨 Tema', 'sb_lang': '🌐 Idioma',
- 'h_sub': 'Sistema de Stock & Produção v3.8 | CW29 2026',
+ 'h_sub': 'Sistema de Stock & Produção v3.10 | CW29 2026',
  'no_data': 'Sem dados para mostrar.',
  'k_avail': 'STOCK DISPONÍVEL', 'k_avail_d': 'armazém + stock conf.',
  'k_process': 'EM PROCESSO (CONF.)', 'k_process_d': 'POs garment ativas',
@@ -465,13 +465,54 @@ T = {
  'i_title': '🚢 A Chegar',
  'i_sub': 'Encomendas de tecido pendentes — só contam para planeamento, não entram no stock líquido',
  'i_none': 'Nenhuma encomenda pendente.', 'i_mark': 'Marcar chegada',
+ 'i_new': '➕ Nova encomenda de tecido',
+ 'i_new_sub': 'regista a PO de tecido — fica pendente até chegar. ao chegar: marca a chegada aqui; depois regista os rolos em 🛠️ Ferramentas → 🚚 Movimentar → 📥 Receção.',
+ 'f_new_opt': '➕ Novo…', 'f_supplier_new': 'Nome do novo fornecedor', 'f_ref_new': 'Código da nova ref', 'f_desc_new': 'Descrição da ref (opcional)',
+ 'b_add_incoming': '💾 Registar encomenda',
+ 'err_po_dup': '⚠️ Essa PO já existe.', 'err_required': '⚠️ Preenche PO, fornecedor, ref e metros (> 0).',
+ 'ok_incoming': '✅ Encomenda {po} registada: {m}m de {ref} ({s}).',
  'i_mark_sub': 'quando o tecido chega, marca aqui a PO — depois regista os rolos em 🚚 Movimentar → Receção',
  'i_po': 'PO de tecido', 'b_arrived': '✓ Chegou',
  'ok_arrived': 'PO {po} marcada como recebida. Regista agora os rolos em 🚚 Movimentar → Receção.',
  'i_cal': 'Calendário de Chegadas', 'i_notrack': 'sem rastreio',
  'p_title': '👕 Produção',
  'p_sub': 'modo live: lança consumos de corte, valida desvios e muda estados — tudo por dropdown',
- 'tab_live': '⚡ Modo Live — Registar Corte', 'tab_edit': '✏️ Tabela Editável', 'tab_status': '🔄 Mudar Estado PO',
+ 'tab_live': '⚡ Modo Live — Registar Corte', 'tab_edit': '✏️ Tabela Editável', 'tab_upload': '📤 Carregar POs', 'tab_status': '🔄 Mudar Estado PO',
+ 'up_title_f': '📤 Carregar encomendas (Excel/CSV)',
+ 'up_sub_g': 'carrega POs garment em lote. colunas: po_number, model_name, confeccionador, po_qty, fabric_ref · opcionais: color, metres_expected (se vazio calcula qty × standard), expected_date, status. descarrega o template 👇',
+ 'up_sub_f': 'carrega encomendas de tecido em lote. colunas: po_number, supplier, ref_code, total_metres · opcionais: color, expected_date, status, tracking_ref. descarrega o template 👇',
+ 'up_template': '⬇️ Template CSV', 'up_file': 'Ficheiro Excel ou CSV',
+ 'up_valid': 'válidas', 'up_warn': 'avisos', 'up_err': 'erros',
+ 'up_line': 'Linha', 'up_sev': 'Tipo', 'up_msg': 'Problema',
+ 'up_preview': 'pré-visualização das linhas a importar:',
+ 'up_import': '✅ Importar {n} linhas', 'up_done': '✅ {n} linhas importadas com sucesso.',
+ 'up_none_ok': '⚠️ Nenhuma linha válida para importar — corrige os erros acima e volta a carregar.',
+ 'up_e_read': '⚠️ Não consegui ler o ficheiro — verifica o formato (xlsx/csv).',
+ 'up_e_cols': '⚠️ Colunas em falta no ficheiro: {c}. Vê o template.',
+ 'up_e_po': 'PO em falta', 'up_e_dupf': 'PO duplicada dentro do ficheiro', 'up_e_dupdb': 'PO já existe na base de dados',
+ 'up_e_model': 'modelo em falta', 'up_e_qty': 'quantidade inválida', 'up_e_conf': 'confeccionador em falta',
+ 'up_e_sup': 'fornecedor em falta', 'up_e_ref': 'ref tecido em falta', 'up_e_metres': 'metros inválidos/em falta',
+ 'up_w_conf': 'confeccionador "{c}" não está na lista — importado na mesma',
+ 'up_w_sup': 'fornecedor "{s}" novo — importado na mesma',
+ 'up_w_ref': 'ref "{r}" nova — fica registada no catálogo ao importar',
+ 'up_w_color': 'cor "{c}" não é conhecida para {r} — confirma se está certa',
+ 'up_w_autom': 'metros calculados: {m} (qty × {std} m/pc standard)',
+ 'up_w_nomap': 'sem consumo no mapa para este modelo+ref — metros por definir',
+ 'up_w_mbad': 'valor de metros ilegível — tentei calcular',
+ 'up_w_date': 'data convertida para {d}',
+ 'up_w_datebad': 'data ilegível — ficou vazia',
+ 'pk_title': '📤 Carregar packing list (rolos em lote)',
+ 'pk_sub': 'carrega a packing list do fornecedor: uma linha por rolo. colunas: ref_code, metres · opcionais: roll, color, lot, po_number (se ligares a PO de tecido, o sistema reconcilia metros e marca-a como recebida). tokens R-REF-NNN gerados automaticamente.',
+ 'pk_wh': 'Armazém de destino', 'pk_rolls': 'rolos', 'pk_summary': 'sumário por ref + cor:',
+ 'b_import_pk': '✅ Registar {n} rolos ({m}m) em {wh}',
+ 'ok_pk': '✅ {n} rolos registados em {wh}: {m}m.',
+ 'pk_mark': 'POs marcadas recebidas: {pos}.',
+ 'pk_w_nocolor': 'cor em falta — importa sem cor (corrige depois em Stock → Atribuir cor)',
+ 'pk_w_duproll': 'rolo {r} repetido no ficheiro para {ref}',
+ 'pk_w_nolot': 'sem lote/remessa — fica fora da seleção rápida por remessa',
+ 'pk_w_ponotfound': 'PO {po} não existe nas encomendas de tecido',
+ 'pk_w_poreceived': 'PO {po} já estava marcada como recebida',
+ 'pk_w_porec': 'PO {po}: packing {x}m vs encomenda {y}m (Δ {z}m)',
  'p_sel_po': 'Seleciona a PO garment', 'p_no_active': 'Sem POs ativas para registar corte.',
  'p_pcs': 'Peças cortadas', 'p_metres': 'Metros reais consumidos', 'b_cut': '✓ Registar corte',
  'dev_ok': 'dentro da tolerância', 'dev_warn': 'atenção — desvio 2–5%', 'dev_bad': '⚠️ DESVIO CRÍTICO > 5%',
@@ -570,7 +611,7 @@ T = {
  'm_tools': '🛠 Tools',
  'sb_system': 'Fabric Stock & Production System', 'sb_nav': 'Navigate', 'sb_data': 'Data: CW29 2026',
  'sb_theme': '🎨 Theme', 'sb_lang': '🌐 Language',
- 'h_sub': 'Fabric Stock & Production System v3.8 | CW29 2026',
+ 'h_sub': 'Fabric Stock & Production System v3.10 | CW29 2026',
  'no_data': 'No data to display.',
  'k_avail': 'AVAILABLE STOCK', 'k_avail_d': 'warehouse + conf. stock',
  'k_process': 'IN PROCESS (CONF.)', 'k_process_d': 'active garment POs',
@@ -617,13 +658,54 @@ T = {
  'i_title': '🚢 Incoming',
  'i_sub': 'Pending fabric orders — they count for planning only, not for net stock',
  'i_none': 'No pending orders.', 'i_mark': 'Mark arrival',
+ 'i_new': '➕ New fabric order',
+ 'i_new_sub': 'register the fabric PO — it stays pending until it arrives. on arrival: mark it here; then register the rolls in 🛠️ Tools → 🚚 Move Fabric → 📥 Receiving.',
+ 'f_new_opt': '➕ New…', 'f_supplier_new': 'New supplier name', 'f_ref_new': 'New ref code', 'f_desc_new': 'Ref description (optional)',
+ 'b_add_incoming': '💾 Save order',
+ 'err_po_dup': '⚠️ That PO already exists.', 'err_required': '⚠️ Fill in PO, supplier, ref and metres (> 0).',
+ 'ok_incoming': '✅ Order {po} saved: {m}m of {ref} ({s}).',
  'i_mark_sub': 'when the fabric arrives, mark the PO here — then register the rolls in 🚚 Move Fabric → Receiving',
  'i_po': 'Fabric PO', 'b_arrived': '✓ Arrived',
  'ok_arrived': 'PO {po} marked as received. Now register the rolls in 🚚 Move Fabric → Receiving.',
  'i_cal': 'Arrival Calendar', 'i_notrack': 'no tracking',
  'p_title': '👕 Production',
  'p_sub': 'live mode: register cutting consumption, validate deviations and change statuses — all via dropdowns',
- 'tab_live': '⚡ Live Mode — Register Cut', 'tab_edit': '✏️ Editable Table', 'tab_status': '🔄 Change PO Status',
+ 'tab_live': '⚡ Live Mode — Register Cut', 'tab_edit': '✏️ Editable Table', 'tab_upload': '📤 Upload POs', 'tab_status': '🔄 Change PO Status',
+ 'up_title_f': '📤 Upload orders (Excel/CSV)',
+ 'up_sub_g': 'bulk upload garment POs. columns: po_number, model_name, confeccionador, po_qty, fabric_ref · optional: color, metres_expected (if empty: qty × standard), expected_date, status. download the template 👇',
+ 'up_sub_f': 'bulk upload fabric orders. columns: po_number, supplier, ref_code, total_metres · optional: color, expected_date, status, tracking_ref. download the template 👇',
+ 'up_template': '⬇️ CSV Template', 'up_file': 'Excel or CSV file',
+ 'up_valid': 'valid', 'up_warn': 'warnings', 'up_err': 'errors',
+ 'up_line': 'Row', 'up_sev': 'Type', 'up_msg': 'Issue',
+ 'up_preview': 'preview of rows to import:',
+ 'up_import': '✅ Import {n} rows', 'up_done': '✅ {n} rows imported successfully.',
+ 'up_none_ok': '⚠️ No valid rows to import — fix the errors above and re-upload.',
+ 'up_e_read': '⚠️ Could not read the file — check the format (xlsx/csv).',
+ 'up_e_cols': '⚠️ Missing columns in the file: {c}. See the template.',
+ 'up_e_po': 'missing PO', 'up_e_dupf': 'PO duplicated within the file', 'up_e_dupdb': 'PO already exists in the database',
+ 'up_e_model': 'missing model', 'up_e_qty': 'invalid quantity', 'up_e_conf': 'missing factory',
+ 'up_e_sup': 'missing supplier', 'up_e_ref': 'missing fabric ref', 'up_e_metres': 'invalid/missing metres',
+ 'up_w_conf': 'factory "{c}" is not in the list — imported anyway',
+ 'up_w_sup': 'supplier "{s}" is new — imported anyway',
+ 'up_w_ref': 'ref "{r}" is new — registered in the catalogue on import',
+ 'up_w_color': 'color "{c}" is not known for {r} — please double-check',
+ 'up_w_autom': 'metres calculated: {m} (qty × {std} m/pc standard)',
+ 'up_w_nomap': 'no consumption map entry for this model+ref — metres undefined',
+ 'up_w_mbad': 'unreadable metres value — tried to calculate',
+ 'up_w_date': 'date converted to {d}',
+ 'up_w_datebad': 'unreadable date — left empty',
+ 'pk_title': '📤 Upload packing list (bulk rolls)',
+ 'pk_sub': 'upload the supplier packing list: one row per roll. columns: ref_code, metres · optional: roll, color, lot, po_number (link a fabric PO and the system reconciles metres and marks it as received). R-REF-NNN tokens generated automatically.',
+ 'pk_wh': 'Destination warehouse', 'pk_rolls': 'rolls', 'pk_summary': 'summary by ref + color:',
+ 'b_import_pk': '✅ Register {n} rolls ({m}m) in {wh}',
+ 'ok_pk': '✅ {n} rolls registered in {wh}: {m}m.',
+ 'pk_mark': 'POs marked as received: {pos}.',
+ 'pk_w_nocolor': 'missing color — imported without color (fix later in Stock → Assign color)',
+ 'pk_w_duproll': 'roll {r} duplicated in the file for {ref}',
+ 'pk_w_nolot': 'no lot/shipment — left out of quick lot selection',
+ 'pk_w_ponotfound': 'PO {po} not found in fabric orders',
+ 'pk_w_poreceived': 'PO {po} was already marked as received',
+ 'pk_w_porec': 'PO {po}: packing {x}m vs order {y}m (Δ {z}m)',
  'p_sel_po': 'Select garment PO', 'p_no_active': 'No active POs to register cuts.',
  'p_pcs': 'Pieces cut', 'p_metres': 'Actual metres consumed', 'b_cut': '✓ Register cut',
  'dev_ok': 'within tolerance', 'dev_warn': 'warning — 2–5% deviation', 'dev_bad': '⚠️ CRITICAL DEVIATION > 5%',
@@ -1738,6 +1820,456 @@ def short_po(po):
     s = str(po or '')
     return '…' + s[-4:] if len(s) > 8 else s
 
+# ===================== UPLOAD EXCEL/CSV (validação + importação em lote) =====================
+GARMENT_ALIASES = {
+    'po_number': ['po_number', 'po', 'po garment', 'po_garment', 'encomenda', 'order'],
+    'model_name': ['model_name', 'modelo', 'model', 'style'],
+    'confeccionador': ['confeccionador', 'conf', 'factory', 'fabrica', 'fábrica'],
+    'po_qty': ['po_qty', 'qty', 'quantidade', 'pcs', 'qtd'],
+    'fabric_ref': ['fabric_ref', 'ref', 'ref tecido', 'ref_tecido', 'tecido', 'fabric'],
+    'color': ['color', 'cor'],
+    'metres_expected': ['metres_expected', 'metros', 'metres', 'metros previstos'],
+    'expected_date': ['expected_date', 'data', 'data entrega', 'date', 'entrega'],
+    'status': ['status', 'estado'],
+}
+FABRIC_ALIASES = {
+    'po_number': ['po_number', 'po', 'po tecido', 'encomenda', 'order'],
+    'supplier': ['supplier', 'fornecedor'],
+    'ref_code': ['ref_code', 'ref', 'ref tecido', 'ref_tecido', 'tecido', 'fabric'],
+    'color': ['color', 'cor'],
+    'total_metres': ['total_metres', 'metros', 'metres', 'quantidade'],
+    'expected_date': ['expected_date', 'data', 'data chegada', 'date', 'chegada'],
+    'status': ['status', 'estado'],
+    'tracking_ref': ['tracking_ref', 'tracking', 'rastreio'],
+}
+
+def cell(v):
+    """Célula normalizada: '' para NaN/None."""
+    if v is None:
+        return ''
+    s = str(v).strip()
+    return '' if s.lower() in ('', 'nan', 'none', 'nat') else s
+
+def parse_num(s):
+    """Número PT/EN: aceita '1.402,80', '1,402.80', '1402.8', '1402,8'."""
+    s = cell(s).replace(' ', '').replace('\u00a0', '')
+    if not s:
+        return None
+    if ',' in s and '.' in s:
+        if s.rfind(',') > s.rfind('.'):  # 1.234,56 (PT)
+            s = s.replace('.', '').replace(',', '.')
+        else:  # 1,234.56 (EN)
+            s = s.replace(',', '')
+    elif ',' in s:
+        s = s.replace(',', '.')
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+def fix_date(s):
+    """'2026-08-15' | '15/08/2026' -> (ISO, mudou?). ('' , True) se ilegível."""
+    s = cell(s)
+    if not s:
+        return '', False
+    if re.match(r'^\d{4}-\d{2}-\d{2}$', s):
+        return s, False
+    m = re.match(r'^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$', s)
+    if m:
+        return f"{m.group(3)}-{int(m.group(2)):02d}-{int(m.group(1)):02d}", True
+    return '', True
+
+def read_upload(f):
+    if f.name.lower().endswith('.csv'):
+        try:
+            return pd.read_csv(f, sep=None, engine='python')
+        except Exception:
+            f.seek(0)
+            return pd.read_csv(f)
+    return pd.read_excel(f)
+
+def norm_cols(df, aliases):
+    """Renomeia colunas do upload para nomes canónicos (case/strip-insensitive)."""
+    lower = {str(c).strip().lower(): c for c in df.columns}
+    ren = {}
+    for canon, names in aliases.items():
+        for n in names:
+            if n in lower:
+                ren[lower[n]] = canon
+                break
+    return df.rename(columns=ren)
+
+def validate_garment_upload(df):
+    """Valida POs garment. Devolve (ok_rows[dict], issues[(linha, po, sev, msg)])."""
+    known_refs = set(query_to_df("SELECT ref_code FROM fabric_refs")['ref_code'])
+    existing = set(query_to_df("SELECT po_number FROM production")['po_number'])
+    known_colors = {}
+    def colors_of(ref):
+        if ref not in known_colors:
+            known_colors[ref] = query_to_df(
+                "SELECT DISTINCT color FROM fabric_rolls WHERE ref_code = ? AND color IS NOT NULL AND color != ''",
+                (ref,))['color'].tolist()
+        return known_colors[ref]
+    issues, ok_rows, seen = [], [], set()
+    has_color = 'color' in df.columns
+    has_m = 'metres_expected' in df.columns
+    has_d = 'expected_date' in df.columns
+    has_s = 'status' in df.columns
+    for i, r in df.iterrows():
+        ln = i + 2
+        po, model, conf, ref = cell(r.get('po_number')), cell(r.get('model_name')), cell(r.get('confeccionador')), cell(r.get('fabric_ref'))
+        color = cell(r.get('color')) if has_color else ''
+        err = False
+        def issue(sev, msg):
+            issues.append((ln, po or '—', sev, msg))
+        if not po:
+            issue('err', t('up_e_po')); err = True
+        elif po in seen:
+            issue('err', t('up_e_dupf')); err = True
+        elif po in existing:
+            issue('err', t('up_e_dupdb')); err = True
+        if not model:
+            issue('err', t('up_e_model')); err = True
+        qty_f = parse_num(r.get('po_qty'))
+        qty = int(qty_f) if qty_f and qty_f > 0 else 0
+        if qty <= 0:
+            issue('err', t('up_e_qty')); err = True
+        if not conf:
+            issue('err', t('up_e_conf')); err = True
+        elif conf not in CONFECCIONADORES:
+            issue('warn', t('up_w_conf', c=conf))
+        if not ref:
+            issue('err', t('up_e_ref')); err = True
+        elif ref not in known_refs:
+            issue('warn', t('up_w_ref', r=ref))
+        if ref and color:
+            kc = colors_of(ref)
+            if kc and not any(color.lower() in k.lower() or k.lower() in color.lower() for k in kc):
+                issue('warn', t('up_w_color', c=color, r=ref))
+        m_exp = parse_num(r.get('metres_expected')) if has_m else None
+        if m_exp is not None and m_exp <= 0:
+            m_exp = None
+        if has_m and cell(r.get('metres_expected')) and m_exp is None:
+            issue('warn', t('up_w_mbad'))
+        if m_exp is None and qty > 0 and ref and not err:
+            std = get_standard_mpc(model, ref)
+            if std:
+                m_exp = round(qty * std, 1)
+                issue('warn', t('up_w_autom', m=f"{m_exp:,.1f}", std=f"{std:.2f}"))
+            else:
+                issue('warn', t('up_w_nomap'))
+        date, changed = fix_date(r.get('expected_date') if has_d else '')
+        if changed and date:
+            issue('warn', t('up_w_date', d=date))
+        elif changed:
+            issue('warn', t('up_w_datebad'))
+        status = cell(r.get('status')).upper() if has_s else ''
+        status = status if status in PROD_STATUSES else 'PENDING'
+        seen.add(po)
+        if not err:
+            ok_rows.append({'po_number': po, 'model_name': model, 'confeccionador': conf, 'po_qty': qty,
+                            'fabric_ref': ref, 'color': color or None, 'metres_expected': m_exp,
+                            'expected_date': date or None, 'status': status})
+    return ok_rows, issues
+
+def validate_fabric_upload(df):
+    """Valida encomendas de tecido. Devolve (ok_rows[dict], issues[(linha, po, sev, msg)])."""
+    known_refs = set(query_to_df("SELECT ref_code FROM fabric_refs")['ref_code'])
+    known_sups = set(query_to_df("SELECT DISTINCT supplier FROM fabric_refs WHERE supplier IS NOT NULL AND supplier != ''")['supplier'])
+    existing = set(query_to_df("SELECT po_number FROM incoming_fabric")['po_number'])
+    known_colors = {}
+    def colors_of(ref):
+        if ref not in known_colors:
+            known_colors[ref] = query_to_df(
+                "SELECT DISTINCT color FROM fabric_rolls WHERE ref_code = ? AND color IS NOT NULL AND color != ''",
+                (ref,))['color'].tolist()
+        return known_colors[ref]
+    issues, ok_rows, seen = [], [], set()
+    has_color = 'color' in df.columns
+    has_d = 'expected_date' in df.columns
+    has_s = 'status' in df.columns
+    has_tr = 'tracking_ref' in df.columns
+    for i, r in df.iterrows():
+        ln = i + 2
+        po, sup, ref = cell(r.get('po_number')), cell(r.get('supplier')), cell(r.get('ref_code'))
+        color = cell(r.get('color')) if has_color else ''
+        err = False
+        def issue(sev, msg):
+            issues.append((ln, po or '—', sev, msg))
+        if not po:
+            issue('err', t('up_e_po')); err = True
+        elif po in seen:
+            issue('err', t('up_e_dupf')); err = True
+        elif po in existing:
+            issue('err', t('up_e_dupdb')); err = True
+        if not sup:
+            issue('err', t('up_e_sup')); err = True
+        elif sup not in known_sups:
+            issue('warn', t('up_w_sup', s=sup))
+        if not ref:
+            issue('err', t('up_e_ref')); err = True
+        new_ref = bool(ref) and ref not in known_refs
+        if new_ref:
+            issue('warn', t('up_w_ref', r=ref))
+        if ref and color:
+            kc = colors_of(ref)
+            if kc and not any(color.lower() in k.lower() or k.lower() in color.lower() for k in kc):
+                issue('warn', t('up_w_color', c=color, r=ref))
+        metres = parse_num(r.get('total_metres'))
+        if metres is None or metres <= 0:
+            issue('err', t('up_e_metres')); err = True; metres = 0
+        date, changed = fix_date(r.get('expected_date') if has_d else '')
+        if changed and date:
+            issue('warn', t('up_w_date', d=date))
+        elif changed:
+            issue('warn', t('up_w_datebad'))
+        status = cell(r.get('status')).upper() if has_s else ''
+        status = status if status in ('EXPECTED', 'IN_TRANSIT') else 'EXPECTED'
+        tracking = cell(r.get('tracking_ref')) if has_tr else ''
+        seen.add(po)
+        if not err:
+            ok_rows.append({'po_number': po, 'supplier': sup, 'ref_code': ref, 'color': color or None,
+                            'total_metres': round(metres, 1), 'expected_date': date or None,
+                            'status': status, 'tracking_ref': tracking or None, 'new_ref': new_ref})
+    return ok_rows, issues
+
+def upload_section(kind):
+    """Secção de carga em massa com validação. kind = 'garment' | 'fabric'."""
+    is_g = kind == 'garment'
+    kp = 'upg' if is_g else 'upf'
+    if is_g:
+        tmpl = ("po_number,model_name,confeccionador,po_qty,fabric_ref,color,metres_expected,expected_date,status\n"
+                "POAPS2000004500,Ease Pants Black Slim (Use all fabric),Samidel,500,GB14W,UNI 1 Black,700.0,2026-09-30,PENDING\n")
+        tmpl_name = "template_pos_garment.csv"
+    else:
+        tmpl = ("po_number,supplier,ref_code,color,total_metres,expected_date,status,tracking_ref\n"
+                "POFAB001,Riopele,GB14W,UNI 1 Black,5000,2026-08-15,EXPECTED,BL123456\n")
+        tmpl_name = "template_encomendas_tecido.csv"
+    st.download_button(t('up_template'), tmpl, tmpl_name, 'text/csv', key=f'{kp}_tmpl')
+    up = st.file_uploader(t('up_file'), type=['xlsx', 'csv'], key=f'{kp}_file')
+    if not up:
+        return
+    try:
+        df = read_upload(up)
+    except Exception:
+        st.error(t('up_e_read'))
+        return
+    df = norm_cols(df, GARMENT_ALIASES if is_g else FABRIC_ALIASES)
+    needed = ['po_number', 'model_name', 'confeccionador', 'po_qty', 'fabric_ref'] if is_g \
+        else ['po_number', 'supplier', 'ref_code', 'total_metres']
+    missing = [c for c in needed if c not in df.columns]
+    if missing:
+        st.error(t('up_e_cols', c=', '.join(missing)))
+        return
+    ok_rows, issues = validate_garment_upload(df) if is_g else validate_fabric_upload(df)
+    n_err = sum(1 for x in issues if x[2] == 'err')
+    n_warn = sum(1 for x in issues if x[2] == 'warn')
+    st.markdown(f"""<div class="alert-bar">
+        <div class="alert-chip ok"><span class="alert-dot"></span>{len(ok_rows)} {t('up_valid')}</div>
+        <div class="alert-chip warning"><span class="alert-dot"></span>{n_warn} {t('up_warn')}</div>
+        <div class="alert-chip critical"><span class="alert-dot"></span>{n_err} {t('up_err')}</div>
+    </div>""", unsafe_allow_html=True)
+    if issues:
+        rep = pd.DataFrame(issues, columns=[t('up_line'), t('c_po2'), t('up_sev'), t('up_msg')])
+        rep[t('up_sev')] = rep[t('up_sev')].map({'err': '❌', 'warn': '⚠️'})
+        render_table(rep, height=250)
+    if not ok_rows:
+        st.warning(t('up_none_ok'))
+        return
+    st.markdown(f'<div class="section-subtitle">{t("up_preview")}</div>', unsafe_allow_html=True)
+    render_table(pd.DataFrame(ok_rows), height=250)
+    if st.button(t('up_import', n=len(ok_rows)), key=f'{kp}_go'):
+        if is_g:
+            for ref in sorted({r['fabric_ref'] for r in ok_rows} - set(query_to_df("SELECT ref_code FROM fabric_refs")['ref_code'])):
+                execute_sql("INSERT OR IGNORE INTO fabric_refs VALUES (?,?,?,?,?)", (ref, None, None, 500, 'm'))
+            execute_many("""INSERT INTO production (po_number, model_name, confeccionador, po_qty, fabric_ref, metres_expected, expected_date, status, date_created)
+                            VALUES (?,?,?,?,?,?,?,?,?)""",
+                         [(r['po_number'], r['model_name'], r['confeccionador'], r['po_qty'], r['fabric_ref'],
+                           r['metres_expected'], r['expected_date'], r['status'], datetime.now().isoformat()) for r in ok_rows])
+            tot_m = sum(r['metres_expected'] or 0 for r in ok_rows)
+            log_movement('IMPORT', None, 'Excel/CSV', 'SNT', None, round(tot_m, 1), None,
+                         f'{len(ok_rows)} POs garment importadas via ficheiro')
+        else:
+            for r in ok_rows:
+                if r['new_ref']:
+                    execute_sql("INSERT OR IGNORE INTO fabric_refs VALUES (?,?,?,?,?)", (r['ref_code'], None, r['supplier'], 500, 'm'))
+            execute_many("""INSERT INTO incoming_fabric (po_number, supplier, ref_code, total_metres, expected_date, status, tracking_ref, date_created)
+                            VALUES (?,?,?,?,?,?,?,?)""",
+                         [(r['po_number'], r['supplier'], r['ref_code'], r['total_metres'], r['expected_date'],
+                           r['status'], r['tracking_ref'], datetime.now().isoformat()) for r in ok_rows])
+            tot_m = sum(r['total_metres'] for r in ok_rows)
+            log_movement('IMPORT', None, 'Excel/CSV', 'XBS', None, round(tot_m, 1), None,
+                         f'{len(ok_rows)} encomendas de tecido importadas via ficheiro')
+        st.success(t('up_done', n=len(ok_rows)))
+        st.rerun()
+
+# ===================== PACKING LIST (rolos individuais em lote) =====================
+PACKING_ALIASES = {
+    'roll': ['roll', 'rolo', 'nº rolo', 'n rolo', 'roll no', 'piece', 'peça', 'peca', 'no'],
+    'ref_code': ['ref_code', 'ref', 'ref tecido', 'ref_tecido', 'tecido', 'fabric', 'article', 'artigo'],
+    'color': ['color', 'cor', 'colour'],
+    'metres': ['metres', 'metros', 'meters', 'metragem', 'qty', 'quantity', 'm'],
+    'lot': ['lot', 'lote', 'remessa', 'shipment', 'batch'],
+    'po_number': ['po_number', 'po', 'po tecido', 'encomenda', 'order'],
+}
+
+def allocate_tokens(ref, n):
+    """Reserva n tokens R-{REF}-NNN sequenciais, continuando a numeração existente."""
+    safe = ref.replace('/', '_').replace(' ', '_')
+    df = query_to_df("SELECT token FROM fabric_rolls WHERE token LIKE ?", (f"R-{safe}-%",))
+    maxn = 0
+    for tok in df['token']:
+        try:
+            maxn = max(maxn, int(str(tok).rsplit('-', 1)[1]))
+        except (ValueError, IndexError):
+            pass
+    return [f"R-{safe}-{maxn + i + 1:03d}" for i in range(n)]
+
+def validate_packing_upload(df):
+    """Valida packing list de rolos. Devolve (ok_rows[dict], issues[(linha, ref, sev, msg)])."""
+    known_refs = set(query_to_df("SELECT ref_code FROM fabric_refs")['ref_code'])
+    colors_cache, po_cache = {}, {}
+    def colors_of(ref):
+        if ref not in colors_cache:
+            colors_cache[ref] = query_to_df(
+                "SELECT DISTINCT color FROM fabric_rolls WHERE ref_code = ? AND color IS NOT NULL AND color != ''",
+                (ref,))['color'].tolist()
+        return colors_cache[ref]
+    def po_info(po):
+        if po not in po_cache:
+            po_cache[po] = query_to_df("SELECT status, total_metres FROM incoming_fabric WHERE po_number = ?", (po,))
+        return po_cache[po]
+    has_roll, has_color, has_lot, has_po = 'roll' in df.columns, 'color' in df.columns, 'lot' in df.columns, 'po_number' in df.columns
+    issues, ok_rows, seen_rolls, po_metres = [], [], set(), {}
+    for i, r in df.iterrows():
+        ln = i + 2
+        ref = cell(r.get('ref_code'))
+        color = cell(r.get('color')) if has_color else ''
+        roll = cell(r.get('roll')) if has_roll else ''
+        lot = cell(r.get('lot')) if has_lot else ''
+        po = cell(r.get('po_number')) if has_po else ''
+        err = False
+        def issue(sev, msg):
+            issues.append((ln, ref or '—', sev, msg))
+        if not ref:
+            issue('err', t('up_e_ref')); err = True
+        new_ref = bool(ref) and ref not in known_refs
+        if new_ref:
+            issue('warn', t('up_w_ref', r=ref))
+        metres = parse_num(r.get('metres'))
+        if metres is None or metres <= 0:
+            issue('err', t('up_e_metres')); err = True; metres = 0
+        if not color:
+            issue('warn', t('pk_w_nocolor'))
+        elif ref and not new_ref:
+            kc = colors_of(ref)
+            if kc and not any(color.lower() in k.lower() or k.lower() in color.lower() for k in kc):
+                issue('warn', t('up_w_color', c=color, r=ref))
+        if roll and (ref, roll) in seen_rolls:
+            issue('warn', t('pk_w_duproll', r=roll, ref=ref))
+        seen_rolls.add((ref, roll))
+        if not lot:
+            issue('warn', t('pk_w_nolot'))
+        if po:
+            pq = po_info(po)
+            if pq.empty:
+                issue('warn', t('pk_w_ponotfound', po=po))
+            elif pq.iloc[0]['status'] == 'RECEIVED':
+                issue('warn', t('pk_w_poreceived', po=po))
+            else:
+                po_metres[po] = po_metres.get(po, 0) + (metres or 0)
+        if not err:
+            ok_rows.append({'roll': roll or None, 'ref_code': ref, 'color': color or None,
+                            'metres': round(metres, 2), 'lot': lot or None,
+                            'po_number': po or None, 'new_ref': new_ref})
+    # reconciliação packing vs encomenda (por PO ligada)
+    for po, m in po_metres.items():
+        exp = po_info(po).iloc[0]['total_metres']
+        if abs(m - exp) > max(1.0, exp * 0.005):
+            issues.append(('—', po, 'warn', t('pk_w_porec', po=po, x=f"{m:,.1f}", y=f"{exp:,.1f}", z=f"{m-exp:+,.1f}")))
+    return ok_rows, issues
+
+def packing_section():
+    """Carga de packing list: rolos individuais para um armazém, com validação."""
+    st.markdown(f'<div class="section-subtitle">{t("pk_sub")}</div>', unsafe_allow_html=True)
+    tmpl = ("roll,ref_code,color,metres,lot,po_number\n"
+            "1,GB14W,UNI 1 Black,65.3,260578,POTEC001\n"
+            "2,GB14W,UNI 1 Black,66.4,260578,POTEC001\n"
+            "3,TCD648/F1,Navy 004,72.0,260579,\n")
+    st.download_button(t('up_template'), tmpl, 'template_packing_list.csv', 'text/csv', key='pk_tmpl')
+    pk_wh = st.selectbox(t('pk_wh'), WAREHOUSES, key='pk_wh')
+    up = st.file_uploader(t('up_file'), type=['xlsx', 'csv'], key='pk_file')
+    if not up:
+        return
+    try:
+        df = read_upload(up)
+    except Exception:
+        st.error(t('up_e_read'))
+        return
+    df = norm_cols(df, PACKING_ALIASES)
+    missing = [c for c in ['ref_code', 'metres'] if c not in df.columns]
+    if missing:
+        st.error(t('up_e_cols', c=', '.join(missing)))
+        return
+    ok_rows, issues = validate_packing_upload(df)
+    n_err = sum(1 for x in issues if x[2] == 'err')
+    n_warn = sum(1 for x in issues if x[2] == 'warn')
+    tot_m = sum(r['metres'] for r in ok_rows)
+    st.markdown(f"""<div class="alert-bar">
+        <div class="alert-chip ok"><span class="alert-dot"></span>{len(ok_rows)} {t('pk_rolls')} · {tot_m:,.1f}m</div>
+        <div class="alert-chip warning"><span class="alert-dot"></span>{n_warn} {t('up_warn')}</div>
+        <div class="alert-chip critical"><span class="alert-dot"></span>{n_err} {t('up_err')}</div>
+    </div>""", unsafe_allow_html=True)
+    if issues:
+        rep = pd.DataFrame(issues, columns=[t('up_line'), t('c_ref'), t('up_sev'), t('up_msg')])
+        rep[t('up_sev')] = rep[t('up_sev')].map({'err': '❌', 'warn': '⚠️'})
+        render_table(rep, height=250)
+    if not ok_rows:
+        st.warning(t('up_none_ok'))
+        return
+    st.markdown(f'<div class="section-subtitle">{t("pk_summary")}</div>', unsafe_allow_html=True)
+    dfr = pd.DataFrame(ok_rows)
+    summ = dfr.groupby([dfr['ref_code'], dfr['color'].fillna('—')]).agg(
+        rolos=('metres', 'count'), metros=('metres', 'sum')).reset_index()
+    summ.columns = ['ref_code', 'color', 'rolos', 'metros']
+    summ['metros'] = summ['metros'].round(2)
+    summ = add_total_row(summ)
+    summ.columns = [t('c_ref'), t('c_color'), t('pk_rolls'), t('c_metres')]
+    render_table(summ)
+    with st.expander(t('up_preview')):
+        render_table(dfr[['roll', 'ref_code', 'color', 'metres', 'lot', 'po_number']], height=300)
+    if st.button(t('b_import_pk', n=len(ok_rows), m=f"{tot_m:,.0f}", wh=pk_wh), key='pk_go'):
+        for ref in sorted({r['ref_code'] for r in ok_rows if r['new_ref']}):
+            execute_sql("INSERT OR IGNORE INTO fabric_refs VALUES (?,?,?,?,?)", (ref, None, None, 500, 'm'))
+        by_ref = {}
+        for r in ok_rows:
+            by_ref.setdefault(r['ref_code'], []).append(r)
+        now = datetime.now().isoformat()
+        rows_insert = []
+        for ref, items in by_ref.items():
+            for tok, r in zip(allocate_tokens(ref, len(items)), items):
+                notes = ' · '.join(x for x in [f"Rolo {r['roll']}" if r['roll'] else '',
+                                               f"PO {r['po_number']}" if r['po_number'] else '',
+                                               'Packing list'] if x)
+                rows_insert.append((tok, ref, r['metres'], r['lot'], r['color'], pk_wh,
+                                    'AVAILABLE', None, now, now, notes))
+        execute_many("INSERT INTO fabric_rolls VALUES (?,?,?,?,?,?,?,?,?,?,?)", rows_insert)
+        received = []
+        for po in sorted({r['po_number'] for r in ok_rows if r['po_number']}):
+            st_q = query_to_df("SELECT status FROM incoming_fabric WHERE po_number = ?", (po,))
+            if not st_q.empty and st_q.iloc[0]['status'] in ('EXPECTED', 'IN_TRANSIT'):
+                execute_sql("UPDATE incoming_fabric SET status = 'RECEIVED' WHERE po_number = ?", (po,))
+                log_movement('ARRIVAL', None, 'Fornecedor', pk_wh, None, None, None,
+                             f'PO tecido {po} recebida via packing list')
+                received.append(po)
+        log_movement('RECEIPT', None, 'Fornecedor', pk_wh, None, round(tot_m, 1), None,
+                     f'Packing list: {len(ok_rows)} rolos ({tot_m:,.1f}m) em {pk_wh}')
+        msg = t('ok_pk', n=len(ok_rows), wh=pk_wh, m=f"{tot_m:,.0f}")
+        if received:
+            msg += ' ' + t('pk_mark', pos=', '.join(received))
+        st.success(msg)
+        st.rerun()
+
 def safe_display_df(df):
     """Limpa DataFrame para evitar PyArrow segfault"""
     df = df.copy()
@@ -2035,6 +2567,55 @@ def render_incoming():
     st.markdown(f'<div class="section-title">{t("i_title")}</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="section-subtitle">{t("i_sub")}</div>', unsafe_allow_html=True)
 
+    # ---------- ➕ NOVA ENCOMENDA DE TECIDO ----------
+    with st.expander(t('i_new')):
+        st.markdown(f'<div class="section-subtitle">{t("i_new_sub")}</div>', unsafe_allow_html=True)
+        ni_sup_new = ni_ref_new = ni_desc_new = ''
+        c1, c2 = st.columns(2)
+        with c1:
+            ni_po = st.text_input(t('c_po2'), key="ni_po")
+            sup_opts = query_to_df("SELECT DISTINCT supplier FROM fabric_refs WHERE supplier IS NOT NULL AND supplier != '' ORDER BY supplier")['supplier'].tolist()
+            ni_sup = st.selectbox(t('c_supplier'), sup_opts + [t('f_new_opt')], key="ni_sup")
+            if ni_sup == t('f_new_opt'):
+                ni_sup_new = st.text_input(t('f_supplier_new'), key="ni_sup_new")
+            ni_m = st.number_input(t('c_metres'), min_value=0.0, step=100.0, format="%.1f", key="ni_m")
+        with c2:
+            ref_opts = query_to_df("SELECT ref_code FROM fabric_refs ORDER BY ref_code")['ref_code'].tolist()
+            ni_ref = st.selectbox(t('c_ref'), ref_opts + [t('f_new_opt')], key="ni_ref")
+            if ni_ref == t('f_new_opt'):
+                ni_ref_new = st.text_input(t('f_ref_new'), key="ni_ref_new")
+                ni_desc_new = st.text_input(t('f_desc_new'), key="ni_desc_new")
+            ni_date = st.date_input(t('c_date_exp'), key="ni_date")
+            nc3, nc4 = st.columns(2)
+            with nc3:
+                ni_status = st.selectbox(t('c_status'), ['EXPECTED', 'IN_TRANSIT'], key="ni_status")
+            with nc4:
+                ni_track = st.text_input(t('c_tracking'), key="ni_track")
+        if st.button(t('b_add_incoming'), key="ni_save"):
+            final_sup = ni_sup_new.strip() if ni_sup == t('f_new_opt') else ni_sup
+            final_ref = ni_ref_new.strip() if ni_ref == t('f_new_opt') else ni_ref
+            if not ni_po.strip() or not final_sup or not final_ref or ni_m <= 0:
+                st.error(t('err_required'))
+            elif not query_to_df("SELECT 1 FROM incoming_fabric WHERE po_number = ?", (ni_po.strip(),)).empty:
+                st.error(t('err_po_dup'))
+            else:
+                if ni_ref == t('f_new_opt'):
+                    execute_sql("INSERT OR IGNORE INTO fabric_refs VALUES (?,?,?,?,?)",
+                                (final_ref, ni_desc_new.strip() or None, final_sup, 500, 'm'))
+                execute_sql("""INSERT INTO incoming_fabric (po_number, supplier, ref_code, total_metres, expected_date, status, tracking_ref, date_created)
+                              VALUES (?,?,?,?,?,?,?,?)""",
+                            (ni_po.strip(), final_sup, final_ref, round(ni_m, 1), str(ni_date),
+                             ni_status, ni_track.strip() or None, datetime.now().isoformat()))
+                log_movement('ORDER', None, final_sup, 'XBS', final_ref, round(ni_m, 1), ni_po.strip(),
+                             f'Nova encomenda de tecido registada ({ni_status})')
+                st.success(t('ok_incoming', po=ni_po.strip(), m=f"{ni_m:,.0f}", ref=final_ref, s=ni_status))
+                st.rerun()
+
+    # ---------- 📤 CARGA EM MASSA (EXCEL/CSV) ----------
+    with st.expander(t('up_title_f')):
+        st.markdown(f'<div class="section-subtitle">{t("up_sub_f")}</div>', unsafe_allow_html=True)
+        upload_section('fabric')
+
     incoming_df = query_to_df("""
         SELECT i.supplier, i.ref_code, fr.description, i.total_metres, i.expected_date, i.status, i.tracking_ref, i.po_number
         FROM incoming_fabric i LEFT JOIN fabric_refs fr ON i.ref_code = fr.ref_code
@@ -2083,7 +2664,7 @@ def render_production():
     st.markdown(f'<div class="section-title">{t("p_title")}</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="section-subtitle">{t("p_sub")}</div>', unsafe_allow_html=True)
 
-    tab_live, tab_list, tab_status = st.tabs([t('tab_live'), t('tab_edit'), t('tab_status')])
+    tab_live, tab_list, tab_up, tab_status = st.tabs([t('tab_live'), t('tab_edit'), t('tab_upload'), t('tab_status')])
 
     # ---------- TAB LIVE ----------
     with tab_live:
@@ -2258,6 +2839,11 @@ def render_production():
                 st.rerun()
 
     # ---------- TAB STATUS ----------
+    # ---------- TAB CARREGAR POs (EXCEL/CSV) ----------
+    with tab_up:
+        st.markdown(f'<div class="section-subtitle">{t("up_sub_g")}</div>', unsafe_allow_html=True)
+        upload_section('garment')
+
     with tab_status:
         st.markdown(f'<div class="section-subtitle">{t("p_status_sub")}</div>', unsafe_allow_html=True)
         all_pos = query_to_df("SELECT po_number, model_name, confeccionador, status FROM production ORDER BY po_number DESC")
@@ -2703,6 +3289,10 @@ def render_movement():
             else:
                 st.error(t('err_metres'))
 
+        # ---------- 📤 PACKING LIST (rolos em lote) ----------
+        with st.expander(t('pk_title')):
+            packing_section()
+
     # ---------- FATURAÇÃO ----------
     with tab_inv:
         st.markdown(f"<div class='info-card'><div class='info-card-title'>{t('inv_title')}</div><div class='info-card-text'>{t('inv_text')}</div></div>", unsafe_allow_html=True)
@@ -2927,7 +3517,7 @@ def main():
     st.sidebar.markdown(f"""
     <div style="position:fixed;bottom:20px;left:20px;right:20px;">
         <div style="border-top:1px solid var(--line);padding-top:12px;color:var(--faint);font-size:11px;text-align:center;">
-            v3.8 | {t('sb_data')}<br>{datetime.now().strftime('%Y-%m-%d')}<br>
+            v3.10 | {t('sb_data')}<br>{datetime.now().strftime('%Y-%m-%d')}<br>
             <span style="color:#3b82f6;font-weight:600;">SNT CMT</span>
         </div>
     </div>
