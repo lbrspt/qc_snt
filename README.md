@@ -1,3 +1,15 @@
+## v4.2 — Contraste de tema à prova de SO · A Chegar com cor + local de entrega · Receção num só passo
+
+| Pedido | Implementação |
+|---|---|
+| **2) Tema vs cor do SO** | Causa: tabs, expanders, file uploader, calendário e toasts seguiam o tema do SO (não estavam cobertos pelo CSS da app). Agora: `color-scheme` por tema + CSS explícito para todos esses elementos — o tema da app (dark ou clean) ganha sempre, com qualquer cor de SO. Nota: a grelha interna do data_editor usa o tema do viewer do Streamlit (definição do browser), mas é sempre legível |
+| **1a) Tracking → Local Entrega** | O campo tracking foi substituído por **Local Entrega** na tabela, na timeline e no formulário |
+| **1b) Coluna Cor** | Nova coluna `color` nas encomendas de tecido — no formulário (cores conhecidas da ref + nova cor), no upload CSV e na tabela (com ponto de cor) |
+| **1c) Dupla marcação eliminada** | A packing list tem agora um campo opcional **"Ligar a encomenda de tecido em aberto"** — no fim da importação a encomenda fica RECEIVED automaticamente (com reconciliação de metros). "Marcar Chegada" no menu A Chegar fica só para o caso de não haver packing |
+| **1d) Destino em todas as entidades** | O dropdown de destino do packing e o Local Entrega das encomendas aceitam **armazéns + confeccionadores** (o formato Riopele continua a rotear pelo recebedor) |
+
+---
+
 ## v4.1 — Cor na PO garment · Metragem por cor · Packing Riopele
 
 | Pedido | Implementação |

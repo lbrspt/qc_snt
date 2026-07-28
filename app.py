@@ -1,6 +1,14 @@
 """
-SNT CMT - Sistema de Stock & Produção v4.1
+SNT CMT - Sistema de Stock & Produção v4.2
 Dados reais CW29 2026
+v4.2:
+- Tema: contraste garantido independentemente da cor do SO — color-scheme por tema + CSS
+  explícito para tabs, expanders, file uploader, calendário, toasts e tooltips
+- A Chegar: tracking substituído por Local de Entrega (armazém OU confeccionador) e nova
+  coluna Cor (manual e CSV); tabela e timeline mostram cor com ponto visual e destino
+- Receção única: packing list passa a poder ligar-se a uma encomenda em aberto e marca a
+  chegada automaticamente — "Marcar Chegada" fica só para quando não há packing
+- Packing: destino alargado a todas as entidades (armazéns + confeccionadores)
 v4.1:
 - Cor na PO garment: nova coluna production.color — gravada no upload CSV, editável na
   Tabela de Produção, mostrada no Modo Live e herdada pelos lotes consolidados com PO ligada
@@ -65,6 +73,7 @@ THEMES = {
         'LINE': 'rgba(255,255,255,0.1)',
         'BTN_SEC_BG': 'rgba(255,255,255,0.08)',
         'SHADOW': 'rgba(0,0,0,0.3)',
+        'COLOR_SCHEME': 'dark',
     },
     'clean': {
         'BG': 'linear-gradient(135deg, #f7f9fd 0%, #eef2f9 50%, #e7edf7 100%)',
@@ -82,13 +91,18 @@ THEMES = {
         'LINE': 'rgba(15,23,42,0.12)',
         'BTN_SEC_BG': 'rgba(15,23,42,0.05)',
         'SHADOW': 'rgba(15,23,42,0.07)',
+        'COLOR_SCHEME': 'light',
     },
 }
 
 CSS_TEMPLATE = """<style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
-    :root { --text: __TEXT__; --muted: __MUTED__; --faint: __FAINT__; --accent: __ACCENT__; --line: __LINE__; --border: __CARD_BORDER__; }
+    :root {
+        --text: __TEXT__; --muted: __MUTED__; --faint: __FAINT__; --accent: __ACCENT__;
+        --line: __LINE__; --border: __CARD_BORDER__;
+        color-scheme: __COLOR_SCHEME__;  /* scrollbars, date picker nativo e controlos do browser seguem o tema da app, não o do SO */
+    }
 
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 
@@ -192,8 +206,58 @@ CSS_TEMPLATE = """<style>
     .tbl tr.tr-total td { font-weight: 700; background: __TABLE_HEAD__; border-top: 2px solid var(--accent); }
     .tbl tr.tr-total:hover td { background: __TABLE_HEAD__; }
 
-    /* Editor nativo (data_editor) — raio/borda; cores internas seguem o tema do SO */
-    [data-testid="stDataFrame"] { border-radius: 12px; overflow: hidden; }
+    /* Editor nativo (data_editor) — raio/borda; a grelha interna mantém o tema do viewer (sempre legível) */
+    [data-testid="stDataFrame"] { border-radius: 12px; overflow: hidden; border: 1px solid __CARD_BORDER__; }
+
+    /* ===== Tabs (st.tabs) — texto sempre no tema da app ===== */
+    button[data-baseweb="tab"] { color: var(--muted) !important; }
+    button[data-baseweb="tab"] p { color: var(--muted) !important; }
+    button[data-baseweb="tab"]:hover p { color: var(--text) !important; }
+    button[data-baseweb="tab"][aria-selected="true"] { color: var(--text) !important; }
+    button[data-baseweb="tab"][aria-selected="true"] p { color: var(--text) !important; }
+    div[data-baseweb="tab-highlight"] { background-color: var(--accent) !important; }
+    div[data-baseweb="tab-border"] { background-color: __CARD_BORDER__ !important; }
+
+    /* ===== Expanders — superfície e texto tematizados ===== */
+    [data-testid="stExpander"] {
+        background: __CARD_BG_SOFT__ !important;
+        border: 1px solid __CARD_BORDER__ !important;
+        border-radius: 12px !important;
+    }
+    [data-testid="stExpander"] summary,
+    [data-testid="stExpander"] summary p,
+    [data-testid="stExpander"] summary span { color: var(--text) !important; }
+    [data-testid="stExpander"] summary svg { fill: var(--muted) !important; }
+    [data-testid="stExpander"] summary:hover svg { fill: var(--text) !important; }
+
+    /* ===== File uploader ===== */
+    [data-testid="stFileUploaderDropzone"] {
+        background: __INPUT_BG__ !important;
+        border-color: __CARD_BORDER__ !important;
+        border-radius: 12px !important;
+    }
+    [data-testid="stFileUploaderDropzone"] span,
+    [data-testid="stFileUploaderDropzone"] small,
+    [data-testid="stFileUploaderDropzoneInstructions"] span,
+    [data-testid="stFileUploaderDropzoneInstructions"] small { color: var(--muted) !important; }
+    [data-testid="stFileUploaderDropzone"] button {
+        background: __BTN_SEC_BG__ !important; color: var(--text) !important;
+        border: 1px solid __CARD_BORDER__ !important; border-radius: 9px !important;
+    }
+    [data-testid="stFileUploaderFile"] span, [data-testid="stFileUploaderFile"] small { color: var(--text) !important; }
+
+    /* ===== Calendário (date input popup) ===== */
+    div[data-baseweb="calendar"] { background: __INPUT_BG__ !important; border-radius: 12px !important; }
+    div[data-baseweb="calendar"] [role="gridcell"] button,
+    div[data-baseweb="calendar"] select,
+    div[data-baseweb="calendar"] div { color: var(--text) !important; }
+
+    /* ===== Toast / tooltip / spinner ===== */
+    div[data-baseweb="toast"], [data-testid="stToast"] { background: __CARD_BG__ !important; color: var(--text) !important; border: 1px solid __CARD_BORDER__ !important; }
+    div[data-baseweb="toast"] *, [data-testid="stToast"] * { color: var(--text) !important; }
+    div[data-baseweb="tooltip"] { background: __INPUT_BG__ !important; color: var(--text) !important; }
+    div[data-baseweb="tooltip"] * { color: var(--text) !important; }
+    [data-testid="stSpinner"] > div { color: var(--text) !important; }
 
     /* Cards */
     .info-card {
@@ -448,7 +512,7 @@ T = {
  'm_tools': '🛠 Ferramentas',
  'sb_system': 'Sistema de Stock & Produção', 'sb_nav': 'Navegar', 'sb_data': 'Dados: CW29 2026',
  'sb_theme': '🎨 Tema', 'sb_lang': '🌐 Idioma',
- 'h_sub': 'Sistema de Stock & Produção v4.1 | CW29 2026',
+ 'h_sub': 'Sistema de Stock & Produção v4.2 | CW29 2026',
  'no_data': 'Sem dados para mostrar.',
  'k_avail': 'STOCK DISPONÍVEL', 'k_avail_d': 'armazém + stock conf.',
  'k_process': 'EM PROCESSO (CONF.)', 'k_process_d': 'POs garment ativas',
@@ -497,11 +561,12 @@ T = {
  'i_none': 'Nenhuma encomenda pendente.', 'i_mark': 'Marcar chegada',
  'i_new': '➕ Nova encomenda de tecido',
  'i_new_sub': 'regista a PO de tecido — fica pendente até chegar. ao chegar: marca a chegada aqui; depois regista os rolos em 🛠️ Ferramentas → 🚚 Movimentar → 📥 Receção.',
- 'f_new_opt': '➕ Novo…', 'f_supplier_new': 'Nome do novo fornecedor', 'f_ref_new': 'Código da nova ref', 'f_desc_new': 'Descrição da ref (opcional)',
+ 'f_new_opt': '➕ Novo…', 'f_supplier_new': 'Nome do novo fornecedor', 'f_ref_new': 'Código da nova ref', 'f_desc_new': 'Descrição da ref (opcional)', 'f_color_new': 'Nome da nova cor',
  'b_add_incoming': '💾 Registar encomenda',
  'err_po_dup': '⚠️ Essa PO já existe.', 'err_required': '⚠️ Preenche PO, fornecedor, ref e metros (> 0).',
  'ok_incoming': '✅ Encomenda {po} registada: {m}m de {ref} ({s}).',
- 'i_mark_sub': 'quando o tecido chega, marca aqui a PO — depois regista os rolos em 🚚 Movimentar → Receção',
+ 'i_mark_sub': 'caminho rápido quando NÃO há packing list — se vais carregar packing, salta este passo: a importação marca a chegada por ti',
+ 'c_dest': 'Local Entrega',
  'i_po': 'PO de tecido', 'b_arrived': '✓ Chegou',
  'ok_arrived': 'PO {po} marcada como recebida. Regista agora os rolos em 🚚 Movimentar → Receção.',
  'i_cal': 'Calendário de Chegadas', 'i_notrack': 'sem rastreio',
@@ -510,7 +575,7 @@ T = {
  'tab_live': '⚡ Modo Live — Registar Corte', 'tab_edit': '✏️ Tabela de Produção', 'tab_upload': '📤 Carregar POs', 'tab_status': '🔄 Mudar Estado PO',
  'up_title_f': '📤 Carregar encomendas (Excel/CSV)',
  'up_sub_g': 'carrega POs garment em lote. colunas: po_number, model_name, confeccionador, po_qty, fabric_ref · opcionais: color, metres_expected (se vazio calcula qty × standard), expected_date, status. descarrega o template 👇',
- 'up_sub_f': 'carrega encomendas de tecido em lote. colunas: po_number, supplier, ref_code, total_metres · opcionais: color, expected_date, status, tracking_ref. descarrega o template 👇',
+ 'up_sub_f': 'carrega encomendas de tecido em lote. colunas: po_number, supplier, ref_code, total_metres · opcionais: color, expected_date, status, destination (armazém ou confeccionador). descarrega o template 👇',
  'up_template': '⬇️ Template CSV', 'up_file': 'Ficheiro Excel ou CSV',
  'up_valid': 'válidas', 'up_warn': 'avisos', 'up_err': 'erros',
  'up_line': 'Linha', 'up_sev': 'Tipo', 'up_msg': 'Problema',
@@ -532,8 +597,9 @@ T = {
  'up_w_date': 'data convertida para {d}',
  'up_w_datebad': 'data ilegível — ficou vazia',
  'pk_title': '📤 Carregar packing list (rolos em lote)',
- 'pk_sub': 'carrega a packing list do fornecedor: uma linha por rolo. colunas: ref_code, metres · opcionais: roll, color, lot, po_number (se ligares a PO de tecido, o sistema reconcilia metros e marca-a como recebida). tokens R-REF-NNN gerados automaticamente.',
- 'pk_wh': 'Armazém de destino', 'pk_rolls': 'rolos', 'pk_summary': 'sumário por ref + cor:',
+ 'pk_sub': 'carrega a packing list do fornecedor (formato simples ou Riopele "Report 1" — detetado automaticamente): uma linha por rolo. se ligares a uma encomenda em aberto, o sistema reconcilia metros e marca-a como recebida — não precisas de "Marcar Chegada" no menu A Chegar. tokens gerados automaticamente.',
+ 'pk_wh': 'Destino (armazém ou confeccionador)', 'pk_rolls': 'rolos', 'pk_summary': 'sumário por ref + cor:',
+ 'pk_linkpo': 'Ligar a encomenda de tecido em aberto (opcional)', 'pk_linkpo_none': '— sem ligação —',
  'b_import_pk': '✅ Registar {n} rolos ({m}m) em {wh}',
  'ok_pk': '✅ {n} rolos registados em {wh}: {m}m.',
  'pk_mark': 'POs marcadas recebidas: {pos}.',
@@ -659,7 +725,7 @@ T = {
  'm_tools': '🛠 Tools',
  'sb_system': 'Fabric Stock & Production System', 'sb_nav': 'Navigate', 'sb_data': 'Data: CW29 2026',
  'sb_theme': '🎨 Theme', 'sb_lang': '🌐 Language',
- 'h_sub': 'Fabric Stock & Production System v4.1 | CW29 2026',
+ 'h_sub': 'Fabric Stock & Production System v4.2 | CW29 2026',
  'no_data': 'No data to display.',
  'k_avail': 'AVAILABLE STOCK', 'k_avail_d': 'warehouse + conf. stock',
  'k_process': 'IN PROCESS (CONF.)', 'k_process_d': 'active garment POs',
@@ -708,11 +774,12 @@ T = {
  'i_none': 'No pending orders.', 'i_mark': 'Mark arrival',
  'i_new': '➕ New fabric order',
  'i_new_sub': 'register the fabric PO — it stays pending until it arrives. on arrival: mark it here; then register the rolls in 🛠️ Tools → 🚚 Move Fabric → 📥 Receiving.',
- 'f_new_opt': '➕ New…', 'f_supplier_new': 'New supplier name', 'f_ref_new': 'New ref code', 'f_desc_new': 'Ref description (optional)',
+ 'f_new_opt': '➕ New…', 'f_supplier_new': 'New supplier name', 'f_ref_new': 'New ref code', 'f_desc_new': 'Ref description (optional)', 'f_color_new': 'New colour name',
  'b_add_incoming': '💾 Save order',
  'err_po_dup': '⚠️ That PO already exists.', 'err_required': '⚠️ Fill in PO, supplier, ref and metres (> 0).',
  'ok_incoming': '✅ Order {po} saved: {m}m of {ref} ({s}).',
- 'i_mark_sub': 'when the fabric arrives, mark the PO here — then register the rolls in 🚚 Move Fabric → Receiving',
+ 'i_mark_sub': 'quick path when there is NO packing list — if you are uploading a packing, skip this: the import marks the arrival for you',
+ 'c_dest': 'Delivery Location',
  'i_po': 'Fabric PO', 'b_arrived': '✓ Arrived',
  'ok_arrived': 'PO {po} marked as received. Now register the rolls in 🚚 Move Fabric → Receiving.',
  'i_cal': 'Arrival Calendar', 'i_notrack': 'no tracking',
@@ -721,7 +788,7 @@ T = {
  'tab_live': '⚡ Live Mode — Register Cut', 'tab_edit': '✏️ Production Table', 'tab_upload': '📤 Upload POs', 'tab_status': '🔄 Change PO Status',
  'up_title_f': '📤 Upload orders (Excel/CSV)',
  'up_sub_g': 'bulk upload garment POs. columns: po_number, model_name, confeccionador, po_qty, fabric_ref · optional: color, metres_expected (if empty: qty × standard), expected_date, status. download the template 👇',
- 'up_sub_f': 'bulk upload fabric orders. columns: po_number, supplier, ref_code, total_metres · optional: color, expected_date, status, tracking_ref. download the template 👇',
+ 'up_sub_f': 'bulk upload fabric orders. columns: po_number, supplier, ref_code, total_metres · optional: color, expected_date, status, destination (warehouse or contractor). download the template 👇',
  'up_template': '⬇️ CSV Template', 'up_file': 'Excel or CSV file',
  'up_valid': 'valid', 'up_warn': 'warnings', 'up_err': 'errors',
  'up_line': 'Row', 'up_sev': 'Type', 'up_msg': 'Issue',
@@ -743,8 +810,9 @@ T = {
  'up_w_date': 'date converted to {d}',
  'up_w_datebad': 'unreadable date — left empty',
  'pk_title': '📤 Upload packing list (bulk rolls)',
- 'pk_sub': 'upload the supplier packing list: one row per roll. columns: ref_code, metres · optional: roll, color, lot, po_number (link a fabric PO and the system reconciles metres and marks it as received). R-REF-NNN tokens generated automatically.',
- 'pk_wh': 'Destination warehouse', 'pk_rolls': 'rolls', 'pk_summary': 'summary by ref + color:',
+ 'pk_sub': 'upload the supplier packing list (simple or Riopele "Report 1" format — auto-detected): one row per roll. Link an open order and the system reconciles metres and marks it as received — no need for "Mark Arrival" in Incoming. Tokens generated automatically.',
+ 'pk_wh': 'Destination (warehouse or contractor)', 'pk_rolls': 'rolls', 'pk_summary': 'summary by ref + color:',
+ 'pk_linkpo': 'Link to an open fabric order (optional)', 'pk_linkpo_none': '— no link —',
  'b_import_pk': '✅ Register {n} rolls ({m}m) in {wh}',
  'ok_pk': '✅ {n} rolls registered in {wh}: {m}m.',
  'pk_mark': 'POs marked as received: {pos}.',
@@ -1747,6 +1815,14 @@ def init_db():
     if 'color' not in prod_cols:
         cursor.execute("ALTER TABLE production ADD COLUMN color TEXT")
 
+    # Migração v4.2: encomendas de tecido ganham cor e local de entrega (tracking sai de cena)
+    cursor.execute("PRAGMA table_info(incoming_fabric)")
+    inc_cols = [r[1] for r in cursor.fetchall()]
+    if 'color' not in inc_cols:
+        cursor.execute("ALTER TABLE incoming_fabric ADD COLUMN color TEXT")
+    if 'destination' not in inc_cols:
+        cursor.execute("ALTER TABLE incoming_fabric ADD COLUMN destination TEXT")
+
     # Consistência v3.8: PO com cortes registados está em CUTTING
     cursor.execute("""UPDATE production SET status = 'CUTTING' WHERE status = 'PENDING'
                       AND po_number IN (SELECT DISTINCT po_garment FROM consumptions)""")
@@ -1757,7 +1833,8 @@ def init_db():
             cursor.execute("INSERT INTO fabric_refs VALUES (?,?,?,?,?)", (ref, desc, supplier, reorder, 'm'))
 
         for po, supplier, ref, metres, date, status in INCOMING_FABRIC:
-            cursor.execute("INSERT INTO incoming_fabric VALUES (?,?,?,?,?,?,?,?)",
+            cursor.execute("""INSERT INTO incoming_fabric (po_number, supplier, ref_code, total_metres, expected_date, status, tracking_ref, date_created)
+                              VALUES (?,?,?,?,?,?,?,?)""",
                          (po, supplier, ref, metres, date, status, None, datetime.now().isoformat()))
 
         for po, model, conf, qty, ref, metres, date, status in PRODUCTION:
@@ -2032,6 +2109,7 @@ FABRIC_ALIASES = {
     'expected_date': ['expected_date', 'data', 'data chegada', 'date', 'chegada'],
     'status': ['status', 'estado'],
     'tracking_ref': ['tracking_ref', 'tracking', 'rastreio'],
+    'destination': ['destination', 'destino', 'local entrega', 'local_entrega', 'delivery', 'entrega', 'local'],
 }
 
 def cell(v):
@@ -2180,6 +2258,7 @@ def validate_fabric_upload(df):
     has_d = 'expected_date' in df.columns
     has_s = 'status' in df.columns
     has_tr = 'tracking_ref' in df.columns
+    has_dest = 'destination' in df.columns
     for i, r in df.iterrows():
         ln = i + 2
         po, sup, ref = cell(r.get('po_number')), cell(r.get('supplier')), cell(r.get('ref_code'))
@@ -2217,11 +2296,13 @@ def validate_fabric_upload(df):
         status = cell(r.get('status')).upper() if has_s else ''
         status = status if status in ('EXPECTED', 'IN_TRANSIT') else 'EXPECTED'
         tracking = cell(r.get('tracking_ref')) if has_tr else ''
+        dest = cell(r.get('destination')) if has_dest else ''
         seen.add(po)
         if not err:
             ok_rows.append({'po_number': po, 'supplier': sup, 'ref_code': ref, 'color': color or None,
                             'total_metres': round(metres, 1), 'expected_date': date or None,
-                            'status': status, 'tracking_ref': tracking or None, 'new_ref': new_ref})
+                            'status': status, 'tracking_ref': tracking or None,
+                            'destination': dest or None, 'new_ref': new_ref})
     return ok_rows, issues
 
 def upload_section(kind):
@@ -2284,10 +2365,10 @@ def upload_section(kind):
             for r in ok_rows:
                 if r['new_ref']:
                     execute_sql("INSERT OR IGNORE INTO fabric_refs VALUES (?,?,?,?,?)", (r['ref_code'], None, r['supplier'], 500, 'm'))
-            execute_many("""INSERT INTO incoming_fabric (po_number, supplier, ref_code, total_metres, expected_date, status, tracking_ref, date_created)
-                            VALUES (?,?,?,?,?,?,?,?)""",
-                         [(r['po_number'], r['supplier'], r['ref_code'], r['total_metres'], r['expected_date'],
-                           r['status'], r['tracking_ref'], datetime.now().isoformat()) for r in ok_rows])
+            execute_many("""INSERT INTO incoming_fabric (po_number, supplier, ref_code, color, total_metres, expected_date, status, destination, tracking_ref, date_created)
+                            VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                         [(r['po_number'], r['supplier'], r['ref_code'], r['color'], r['total_metres'], r['expected_date'],
+                           r['status'], r['destination'], r['tracking_ref'], datetime.now().isoformat()) for r in ok_rows])
             tot_m = sum(r['total_metres'] for r in ok_rows)
             log_movement('IMPORT', None, 'Excel/CSV', 'XBS', None, round(tot_m, 1), None,
                          f'{len(ok_rows)} encomendas de tecido importadas via ficheiro')
@@ -2463,7 +2544,7 @@ def packing_section():
             "2,GB14W,UNI 1 Black,66.4,260578,POTEC001\n"
             "3,TCD648/F1,Navy 004,72.0,260579,\n")
     st.download_button(t('up_template'), tmpl, 'template_packing_list.csv', 'text/csv', key='pk_tmpl')
-    pk_wh = st.selectbox(t('pk_wh'), WAREHOUSES, key='pk_wh')
+    pk_wh = st.selectbox(t('pk_wh'), WAREHOUSES + CONFECCIONADORES, key='pk_wh')
     up = st.file_uploader(t('up_file'), type=['xlsx', 'csv'], key='pk_file')
     if not up:
         return
@@ -2499,6 +2580,20 @@ def packing_section():
     if missing:
         st.error(t('up_e_cols', c=', '.join(missing)))
         return
+    # v4.2: ligação opcional a uma encomenda de tecido em aberto — a chegada fica marcada
+    # automaticamente no fim da importação (sem precisar de "Marcar Chegada" no menu A Chegar)
+    open_pos = query_to_df("SELECT po_number, supplier, ref_code, total_metres FROM incoming_fabric WHERE status IN ('EXPECTED','IN_TRANSIT') ORDER BY expected_date")
+    link_po = None
+    if not open_pos.empty:
+        link_opts = [t('pk_linkpo_none')] + open_pos['po_number'].tolist()
+        link_sel = st.selectbox(t('pk_linkpo'), link_opts, key='pk_linkpo',
+                                format_func=lambda p: p if p == t('pk_linkpo_none') else
+                                f"{p} — {open_pos[open_pos['po_number']==p].iloc[0]['ref_code']} {open_pos[open_pos['po_number']==p].iloc[0]['total_metres']:,.0f}m")
+        link_po = None if link_sel == t('pk_linkpo_none') else link_sel
+    if link_po and 'po_number' not in df.columns:
+        df['po_number'] = link_po
+    elif link_po:
+        df['po_number'] = df['po_number'].apply(lambda v: cell(v) or link_po)
     ok_rows, issues = validate_packing_upload(df)
     # destino por linha (formato Riopele: pelo recebedor; formato simples: armazém selecionado)
     recv_by_roll = dict(zip(df.get('roll', pd.Series(dtype=str)), df.get('receiver', pd.Series(dtype=str)))) if rio_df is not None else {}
@@ -2911,10 +3006,25 @@ def render_incoming():
             with nc3:
                 ni_status = st.selectbox(t('c_status'), ['EXPECTED', 'IN_TRANSIT'], key="ni_status")
             with nc4:
-                ni_track = st.text_input(t('c_tracking'), key="ni_track")
+                ni_dest = st.selectbox(t('c_dest'), WAREHOUSES + CONFECCIONADORES, key="ni_dest")
+            # cor da encomenda: cores conhecidas da ref + opção nova
+            ni_color_new = ''
+            if ni_ref != t('f_new_opt'):
+                nc_opts = query_to_df("""SELECT DISTINCT color FROM fabric_rolls
+                                         WHERE ref_code = ? AND color IS NOT NULL AND color != '' ORDER BY color""",
+                                      (ni_ref,))['color'].tolist()
+                ni_color = st.selectbox(t('c_color'), ['—'] + nc_opts + [t('f_new_opt')], key="ni_color")
+                if ni_color == t('f_new_opt'):
+                    ni_color_new = st.text_input(t('f_color_new'), key="ni_color_new")
+            else:
+                ni_color = st.text_input(t('c_color'), key="ni_color_free")
         if st.button(t('b_add_incoming'), key="ni_save"):
             final_sup = ni_sup_new.strip() if ni_sup == t('f_new_opt') else ni_sup
             final_ref = ni_ref_new.strip() if ni_ref == t('f_new_opt') else ni_ref
+            if ni_ref == t('f_new_opt'):
+                final_color = ni_color.strip() if isinstance(ni_color, str) else ''
+            else:
+                final_color = ni_color_new.strip() if ni_color == t('f_new_opt') else ('' if ni_color == '—' else ni_color)
             if not ni_po.strip() or not final_sup or not final_ref or ni_m <= 0:
                 st.error(t('err_required'))
             elif not query_to_df("SELECT 1 FROM incoming_fabric WHERE po_number = ?", (ni_po.strip(),)).empty:
@@ -2923,11 +3033,11 @@ def render_incoming():
                 if ni_ref == t('f_new_opt'):
                     execute_sql("INSERT OR IGNORE INTO fabric_refs VALUES (?,?,?,?,?)",
                                 (final_ref, ni_desc_new.strip() or None, final_sup, 500, 'm'))
-                execute_sql("""INSERT INTO incoming_fabric (po_number, supplier, ref_code, total_metres, expected_date, status, tracking_ref, date_created)
-                              VALUES (?,?,?,?,?,?,?,?)""",
-                            (ni_po.strip(), final_sup, final_ref, round(ni_m, 1), str(ni_date),
-                             ni_status, ni_track.strip() or None, datetime.now().isoformat()))
-                log_movement('ORDER', None, final_sup, 'XBS', final_ref, round(ni_m, 1), ni_po.strip(),
+                execute_sql("""INSERT INTO incoming_fabric (po_number, supplier, ref_code, color, total_metres, expected_date, status, destination, date_created)
+                              VALUES (?,?,?,?,?,?,?,?,?)""",
+                            (ni_po.strip(), final_sup, final_ref, final_color or None, round(ni_m, 1), str(ni_date),
+                             ni_status, ni_dest, datetime.now().isoformat()))
+                log_movement('ORDER', None, final_sup, ni_dest, final_ref, round(ni_m, 1), ni_po.strip(),
                              f'Nova encomenda de tecido registada ({ni_status})')
                 st.success(t('ok_incoming', po=ni_po.strip(), m=f"{ni_m:,.0f}", ref=final_ref, s=ni_status))
                 st.rerun()
@@ -2938,14 +3048,15 @@ def render_incoming():
         upload_section('fabric')
 
     incoming_df = query_to_df("""
-        SELECT i.supplier, i.ref_code, fr.description, i.total_metres, i.expected_date, i.status, i.tracking_ref, i.po_number
+        SELECT i.supplier, i.ref_code, fr.description, i.color, i.total_metres, i.expected_date, i.status, i.destination, i.po_number
         FROM incoming_fabric i LEFT JOIN fabric_refs fr ON i.ref_code = fr.ref_code
         WHERE i.status IN ('EXPECTED', 'IN_TRANSIT') ORDER BY i.expected_date
     """)
 
     if not incoming_df.empty:
+        incoming_df['color'] = incoming_df['color'].apply(lambda c: (color_dot(c) + ' ' + c) if pd.notna(c) and c else '')
         clean = safe_display_df(add_total_row(incoming_df))
-        clean.columns = [t('c_supplier'), t('c_ref'), t('c_desc'), t('c_metres'), t('c_date_exp'), t('c_status'), t('c_tracking'), t('c_po2')]
+        clean.columns = [t('c_supplier'), t('c_ref'), t('c_desc'), t('c_color'), t('c_metres'), t('c_date_exp'), t('c_status'), t('c_dest'), t('c_po2')]
         render_table(clean, height=400)
 
         # Marcar como recebido → vai para Receção no menu Movimentar
@@ -2967,12 +3078,12 @@ def render_incoming():
         st.markdown('<div class="timeline">', unsafe_allow_html=True)
         for _, row in incoming_df.head(10).iterrows():
             status_class = "completed" if row['status'] == 'IN_TRANSIT' else "pending"
-            tracking = row['tracking_ref'] if row['tracking_ref'] else t('i_notrack')
+            dest = row['destination'] if pd.notna(row['destination']) and row['destination'] else '—'
             st.markdown(f"""
             <div class="timeline-item {status_class}">
                 <div class="timeline-date">{row['expected_date']}</div>
                 <div class="timeline-text">{row['po_number']} — {row['supplier']} {row['ref_code']} {row['total_metres']:,.0f}m</div>
-                <div class="timeline-meta">{row['status']} | {tracking}</div>
+                <div class="timeline-meta">{row['status']} | {t('c_dest')}: {dest}</div>
             </div>
             """, unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
@@ -3960,7 +4071,7 @@ def main():
     st.sidebar.markdown(f"""
     <div style="position:fixed;bottom:20px;left:20px;right:20px;">
         <div style="border-top:1px solid var(--line);padding-top:12px;color:var(--faint);font-size:11px;text-align:center;">
-            v4.1 | {t('sb_data')}<br>{datetime.now().strftime('%Y-%m-%d')}<br>
+            v4.2 | {t('sb_data')}<br>{datetime.now().strftime('%Y-%m-%d')}<br>
             <span style="color:#3b82f6;font-weight:600;">SNT CMT</span>
         </div>
     </div>
