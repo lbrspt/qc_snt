@@ -1,6 +1,16 @@
 """
-SNT CMT - Sistema de Stock & Produção v3.10
+SNT CMT - Sistema de Stock & Produção v4.0
 Dados reais CW29 2026
+v4.0:
+- Consumos reestruturados por MODELO BASE + FIT (a cor sai do consumo): mapa v4,
+  deteção automática do modelo a partir do nome da PO e associação manual PO ↔ modelo base
+- Menu Consumos simplificado: 📊 Mapa por Modelo (visual + edição + associações) e
+  🏃 Andamento & Registos (guia só-leitura com desvios + registos reais + autorizações)
+- Menu Produção simplificado: Modo Live + Tabela Editável (agora com ESTADO da PO —
+  INVOICED faz baixa automática) + Carregar POs. "Mudar Estado PO" removido
+- Fix: consumo esperado deixou de falhar — matching por modelo base/fit em vez de nome com cor
+- Dashboard: refs sem stock nem movimento ficam escondidas (opcional mostrar)
+- Rolos/packings intocados: mesma BD snt_cmt_v37.db, migrações idempotentes
 v3.4:
 - Sistema de cor: cor sempre ligada à referência com ponto de cor visual em todo o site
 - Token sempre na última posição (tabelas, seleções de lotes e rolos)
@@ -293,6 +303,19 @@ CSS_TEMPLATE = """<style>
     .consumo-var { flex: 0.6; font-size: 12px; font-weight: 600; text-align: right; }
     .consumo-var.up { color: #ef4444; }
     .consumo-var.down { color: #22c55e; }
+    .consumo-base {
+        color: var(--text); font-size: 13.5px; font-weight: 700;
+        padding: 14px 0 6px 0; margin-top: 6px;
+        border-top: 1px solid __CARD_BORDER__;
+        display: flex; justify-content: space-between; align-items: center;
+    }
+    .consumo-base .cb-meta { color: var(--faint); font-size: 11px; font-weight: 500; }
+    .consumo-row.fit-row { padding-left: 18px; }
+    .consumo-row.fit-row .consumo-model { font-weight: 400; color: var(--muted); }
+    .fit-tag {
+        display: inline-block; background: rgba(37,99,235,0.12); color: var(--accent);
+        padding: 2px 9px; border-radius: 6px; font-size: 11px; font-weight: 600; margin-right: 8px;
+    }
 
     /* Warehouse cards */
     .wh-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
@@ -418,7 +441,7 @@ T = {
  'm_tools': '🛠 Ferramentas',
  'sb_system': 'Sistema de Stock & Produção', 'sb_nav': 'Navegar', 'sb_data': 'Dados: CW29 2026',
  'sb_theme': '🎨 Tema', 'sb_lang': '🌐 Idioma',
- 'h_sub': 'Sistema de Stock & Produção v3.10 | CW29 2026',
+ 'h_sub': 'Sistema de Stock & Produção v4.0 | CW29 2026',
  'no_data': 'Sem dados para mostrar.',
  'k_avail': 'STOCK DISPONÍVEL', 'k_avail_d': 'armazém + stock conf.',
  'k_process': 'EM PROCESSO (CONF.)', 'k_process_d': 'POs garment ativas',
@@ -476,8 +499,8 @@ T = {
  'ok_arrived': 'PO {po} marcada como recebida. Regista agora os rolos em 🚚 Movimentar → Receção.',
  'i_cal': 'Calendário de Chegadas', 'i_notrack': 'sem rastreio',
  'p_title': '👕 Produção',
- 'p_sub': 'modo live: lança consumos de corte, valida desvios e muda estados — tudo por dropdown',
- 'tab_live': '⚡ Modo Live — Registar Corte', 'tab_edit': '✏️ Tabela Editável', 'tab_upload': '📤 Carregar POs', 'tab_status': '🔄 Mudar Estado PO',
+ 'p_sub': 'regista cortes no modo live e gere as POs na tabela — o estado muda na própria tabela (INVOICED faz baixa de stock)',
+ 'tab_live': '⚡ Modo Live — Registar Corte', 'tab_edit': '✏️ Tabela de Produção', 'tab_upload': '📤 Carregar POs', 'tab_status': '🔄 Mudar Estado PO',
  'up_title_f': '📤 Carregar encomendas (Excel/CSV)',
  'up_sub_g': 'carrega POs garment em lote. colunas: po_number, model_name, confeccionador, po_qty, fabric_ref · opcionais: color, metres_expected (se vazio calcula qty × standard), expected_date, status. descarrega o template 👇',
  'up_sub_f': 'carrega encomendas de tecido em lote. colunas: po_number, supplier, ref_code, total_metres · opcionais: color, expected_date, status, tracking_ref. descarrega o template 👇',
@@ -521,17 +544,30 @@ T = {
  'err_vals': 'Peças e metros têm de ser > 0',
  'ok_cut': '✅ Corte registado: {pcs} pcs × {mpc} m/pc = {m}m',
  'card_conf': 'Confeccionador', 'card_pcs': 'Peças PO', 'card_fref': 'Ref Tecido', 'card_cons': 'Consumo Esperado',
- 'src_real': '📈 média real produtiva', 'src_std': '📐 standard predefinido', 'no_map': 'sem mapa',
- 'p_edit_sub': 'tabela dinâmica editável — edita células, adiciona ou remove linhas e grava com um clique. faturação fica na tab ao lado (faz baixa de stock).',
+ 'src_real': '📈 média real produtiva', 'src_std': '📐 standard predefinido', 'src_po': '📋 declarado na PO', 'no_map': 'sem mapa',
+ 'p_edit_sub': 'tabela dinâmica editável — edita peças, metros, datas e o ESTADO da PO num só ecrã. mudar para INVOICED faz a baixa automática dos metros em processo (já não precisas de um menu próprio).',
  'p_view': 'Ver', 'v_active': 'Ativas (PENDING + CUTTING)',
  'b_save_prod': '💾 Guardar alterações de produção', 'ok_prod': '✅ Produção guardada — {n} POs.',
+ 'ok_prod_inv': ' · {n} faturadas com baixa de stock',
  'p_no_inv': 'Sem POs faturadas.',
  'p_status_sub': 'mudança de estado por dropdown — INVOICED faz baixa automática dos metros em processo',
  'p_new_status': 'Novo estado', 'b_apply_status': '✓ Aplicar estado',
  'ok_inv': '✅ PO {po} faturada — {m}m saíram de em processo.',
  'ok_status': '✅ PO {po} → {st}',
  'c_title': '📊 Consumos',
- 'c_sub': 'mapa partilhado por modelo base — editável na grelha. desvio > 5% gera alerta.',
+ 'c_sub': 'consumo por modelo base + fit (a cor já não entra no consumo) — o sistema deteta o modelo a partir do nome da PO; se não encontrar, associas manualmente',
+ 'c_tab_modelos': '📊 Mapa por Modelo', 'c_tab_andamento': '🏃 Andamento & Registos',
+ 'c_map_sub': 'standard e real médio por modelo base + fit. desvio > 5% gera alerta. edita o mapa e gere as associações PO ↔ modelo base mais abaixo.',
+ 'c_prog_sub': 'guia de andamento das produções em corte (só leitura, com nota de desvios) seguido dos registos reais e autorizações — tudo num só ecrã',
+ 'c_fit': 'Fit', 'c_basemodel': 'Modelo Base', 'c_mpc_col': 'm/pc',
+ 'c_alloc_title': '🔗 Modelo base das POs',
+ 'c_alloc_sub': 'cada PO consome segundo o modelo base + fit do mapa. a deteção é automática pelo nome da PO; aqui podes rever e corrigir — útil para modelos novos ou nomes fora do padrão. associações manuais ficam guardadas na PO.',
+ 'c_alloc_tbl': 'Associações atuais — POs ativas',
+ 'c_alloc_po': 'PO garment', 'c_alloc_entry': 'Entrada do mapa (modelo base · fit · ref)',
+ 'b_alloc': '✓ Guardar associação', 'ok_alloc': '✅ {po} associada a {bm}',
+ 'c_src_auto': 'auto', 'c_src_manual': 'manual', 'c_src_missing': '⚠️ sem mapa',
+ 'p_alloc_inline': 'Para teres consumo esperado e validação de desvio, associa esta PO a um modelo base do mapa:',
+ 'd_show_empty': 'Mostrar refs sem stock nem movimento',
  'c_tab_running': '🏃 Em Curso',
  'c_tab_map': '📊 Mapa Visual', 'c_tab_real': '🧾 Registos Reais', 'c_tab_edit': '✏️ Editar Mapa',
  'c_running_sub': 'POs em corte comparadas com o standard — barra = progresso de corte · chip = desvio m/pc (já descontando extras autorizados) · projeção de metros extra no fim da PO.',
@@ -611,7 +647,7 @@ T = {
  'm_tools': '🛠 Tools',
  'sb_system': 'Fabric Stock & Production System', 'sb_nav': 'Navigate', 'sb_data': 'Data: CW29 2026',
  'sb_theme': '🎨 Theme', 'sb_lang': '🌐 Language',
- 'h_sub': 'Fabric Stock & Production System v3.10 | CW29 2026',
+ 'h_sub': 'Fabric Stock & Production System v4.0 | CW29 2026',
  'no_data': 'No data to display.',
  'k_avail': 'AVAILABLE STOCK', 'k_avail_d': 'warehouse + conf. stock',
  'k_process': 'IN PROCESS (CONF.)', 'k_process_d': 'active garment POs',
@@ -669,8 +705,8 @@ T = {
  'ok_arrived': 'PO {po} marked as received. Now register the rolls in 🚚 Move Fabric → Receiving.',
  'i_cal': 'Arrival Calendar', 'i_notrack': 'no tracking',
  'p_title': '👕 Production',
- 'p_sub': 'live mode: register cutting consumption, validate deviations and change statuses — all via dropdowns',
- 'tab_live': '⚡ Live Mode — Register Cut', 'tab_edit': '✏️ Editable Table', 'tab_upload': '📤 Upload POs', 'tab_status': '🔄 Change PO Status',
+ 'p_sub': 'register cuts in live mode and manage POs in the table — the status changes right in the table (INVOICED deducts stock)',
+ 'tab_live': '⚡ Live Mode — Register Cut', 'tab_edit': '✏️ Production Table', 'tab_upload': '📤 Upload POs', 'tab_status': '🔄 Change PO Status',
  'up_title_f': '📤 Upload orders (Excel/CSV)',
  'up_sub_g': 'bulk upload garment POs. columns: po_number, model_name, confeccionador, po_qty, fabric_ref · optional: color, metres_expected (if empty: qty × standard), expected_date, status. download the template 👇',
  'up_sub_f': 'bulk upload fabric orders. columns: po_number, supplier, ref_code, total_metres · optional: color, expected_date, status, tracking_ref. download the template 👇',
@@ -714,17 +750,30 @@ T = {
  'err_vals': 'Pieces and metres must be > 0',
  'ok_cut': '✅ Cut registered: {pcs} pcs × {mpc} m/pc = {m}m',
  'card_conf': 'Contractor', 'card_pcs': 'PO Pieces', 'card_fref': 'Fabric Ref', 'card_cons': 'Expected Consumption',
- 'src_real': '📈 real production average', 'src_std': '📐 predefined standard', 'no_map': 'no map',
- 'p_edit_sub': 'editable dynamic table — edit cells, add or remove rows and save with one click. Invoicing stays in the next tab (it deducts stock).',
+ 'src_real': '📈 real production average', 'src_std': '📐 predefined standard', 'src_po': '📋 declared on the PO', 'no_map': 'no map',
+ 'p_edit_sub': 'editable dynamic table — edit pieces, metres, dates and the PO STATUS in one screen. Setting INVOICED automatically deducts in-process metres (no separate menu needed).',
  'p_view': 'Show', 'v_active': 'Active (PENDING + CUTTING)',
  'b_save_prod': '💾 Save production changes', 'ok_prod': '✅ Production saved — {n} POs.',
+ 'ok_prod_inv': ' · {n} invoiced with stock deduction',
  'p_no_inv': 'No invoiced POs.',
  'p_status_sub': 'status change via dropdown — INVOICED automatically deducts in-process metres',
  'p_new_status': 'New status', 'b_apply_status': '✓ Apply status',
  'ok_inv': '✅ PO {po} invoiced — {m}m left in-process.',
  'ok_status': '✅ PO {po} → {st}',
  'c_title': '📊 Consumption',
- 'c_sub': 'shared map by base model — editable in the grid. deviation > 5% triggers an alert.',
+ 'c_sub': 'consumption by base model + fit (colour no longer part of consumption) — the system detects the model from the PO name; if not found, you assign it manually',
+ 'c_tab_modelos': '📊 Map by Model', 'c_tab_andamento': '🏃 Progress & Records',
+ 'c_map_sub': 'standard and actual average by base model + fit. deviation > 5% triggers an alert. Edit the map and manage PO ↔ base model links below.',
+ 'c_prog_sub': 'read-only cutting progress guide with deviation notes, followed by actual records and authorizations — all in one screen',
+ 'c_fit': 'Fit', 'c_basemodel': 'Base Model', 'c_mpc_col': 'm/pc',
+ 'c_alloc_title': '🔗 PO base models',
+ 'c_alloc_sub': 'each PO consumes according to a map base model + fit. Detection is automatic from the PO name; review and fix here — useful for new models or unusual names. Manual links are saved on the PO.',
+ 'c_alloc_tbl': 'Current links — active POs',
+ 'c_alloc_po': 'Garment PO', 'c_alloc_entry': 'Map entry (base model · fit · ref)',
+ 'b_alloc': '✓ Save link', 'ok_alloc': '✅ {po} linked to {bm}',
+ 'c_src_auto': 'auto', 'c_src_manual': 'manual', 'c_src_missing': '⚠️ no map',
+ 'p_alloc_inline': 'To get expected consumption and deviation validation, link this PO to a map base model:',
+ 'd_show_empty': 'Show refs with no stock or movement',
  'c_tab_running': '🏃 Running',
  'c_tab_map': '📊 Visual Map', 'c_tab_real': '🧾 Actual Records', 'c_tab_edit': '✏️ Edit Map',
  'c_running_sub': 'POs being cut vs standard — bar = cutting progress · chip = m/pc deviation (net of authorized extras) · projected extra metres at PO completion.',
@@ -916,6 +965,46 @@ def add_total_row(df, exclude=()):
         else:
             total[c] = ''
     return pd.concat([df, pd.DataFrame([total])], ignore_index=True)
+
+
+# ===================== MODELO BASE + FIT (v4) =====================
+# O consumo deixa de depender da COR do modelo: cada nome de PO/modelo é reduzido a
+# (modelo base, fit). Ex.: "Ease Pants Black Slim (Use all fabric)" → ("Ease Pants", "Slim")
+_FIT_LIST = [
+    'double breasted', 'relaxed fit', 'wide fit', 'relaxed', 'regular', 'slim',
+    'straight', 'tapered', 'fitted', 'skinny', 'cropped', 'wide', 'short', 'long',
+]
+_COLOR_LIST = sorted([
+    'dark grey melange', 'medium beige melange', 'mocha melange', 'vanilla melange',
+    'steel melange', 'charcoal melange', 'dark chestnut melange',
+    'signature dark brown', 'signature green', 'signature mid blue', 'signature navy', 'signature sand',
+    'walnut herringbone', 'domino herringbone', 'brown herringbone',
+    'berry pinstripe', 'night silver pinstripe',
+    'dark brown check', 'black check',
+    'midnight blue', 'blue nights', 'northern pine', 'pine green', 'pepper grey',
+    'grey flint', 'cool brown', 'deep espresso', 'dark navy', 'dark grey', 'dark beige',
+    'dark brown', 'cloudy blue', 'light blue', 'dark green', 'cloud grey', 'cocoa brown',
+    'dusty olive', 'almond', 'sahara', 'mocha', 'evergreen', 'khaki', 'cognac', 'walnut',
+    'berry', 'chestnut', 'olive', 'silver', 'ashes', 'camel',
+    'black', 'navy', 'sand', 'grey', 'gray', 'brown', 'green', 'blue', 'beige', 'red', 'white',
+], key=len, reverse=True)
+
+def derive_model_fit(model_name):
+    """Reduz o nome comercial a (modelo_base, fit). Remove cor, notas entre parênteses
+    e sufixos 'Men/Women <pattern>' ficando o padrão (Plain/Checked/Striped) na base."""
+    s = re.sub(r'\(.*?\)', ' ', str(model_name or ''))
+    s = re.sub(r'\bmen\b', ' ', s, flags=re.I)
+    s = re.sub(r'\s+', ' ', s).strip()
+    fit = ''
+    for f in _FIT_LIST:
+        if re.search(r'\b' + re.escape(f) + r'\b', s, flags=re.I):
+            fit = ' '.join(w.capitalize() for w in f.split())
+            s = re.sub(r'\b' + re.escape(f) + r'\b', ' ', s, flags=re.I)
+            break
+    for c in _COLOR_LIST:
+        s = re.sub(r'\b' + re.escape(c) + r'\b', ' ', s, flags=re.I)
+    base = re.sub(r'\s+', ' ', s).strip(' -–—')
+    return base, fit
 
 
 # ===================== SEED DATA (CW29 2026, corrigido v3.3) =====================
@@ -1582,6 +1671,14 @@ def init_db():
         m_per_pc_actual REAL,
         PRIMARY KEY (model_name, fabric_ref)
     );
+    CREATE TABLE IF NOT EXISTS consumption_map_v4 (
+        base_model TEXT NOT NULL,
+        fit TEXT NOT NULL DEFAULT '',
+        fabric_ref TEXT NOT NULL,
+        m_per_pc_expected REAL NOT NULL,
+        m_per_pc_actual REAL,
+        PRIMARY KEY (base_model, fit, fabric_ref)
+    );
     CREATE TABLE IF NOT EXISTS consumptions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         po_garment TEXT NOT NULL,
@@ -1624,6 +1721,12 @@ def init_db():
         cursor.execute("ALTER TABLE consumptions ADD COLUMN authorized INTEGER DEFAULT 0")
         cursor.execute("ALTER TABLE consumptions ADD COLUMN authorized_note TEXT")
 
+    # Migração v4: modelo base associado manualmente à PO ('Base|Fit'; NULL = deteção automática)
+    cursor.execute("PRAGMA table_info(production)")
+    prod_cols = [r[1] for r in cursor.fetchall()]
+    if 'base_model' not in prod_cols:
+        cursor.execute("ALTER TABLE production ADD COLUMN base_model TEXT")
+
     # Consistência v3.8: PO com cortes registados está em CUTTING
     cursor.execute("""UPDATE production SET status = 'CUTTING' WHERE status = 'PENDING'
                       AND po_number IN (SELECT DISTINCT po_garment FROM consumptions)""")
@@ -1638,7 +1741,9 @@ def init_db():
                          (po, supplier, ref, metres, date, status, None, datetime.now().isoformat()))
 
         for po, model, conf, qty, ref, metres, date, status in PRODUCTION:
-            cursor.execute("INSERT INTO production VALUES (?,?,?,?,?,?,?,?,?)",
+            cursor.execute("""INSERT INTO production (po_number, model_name, confeccionador, po_qty, fabric_ref,
+                              metres_expected, expected_date, status, date_created)
+                              VALUES (?,?,?,?,?,?,?,?,?)""",
                          (po, model, conf, qty, ref, metres, date, status, datetime.now().isoformat()))
 
         for model, ref, mpc in CONSUMPTION_MAP:
@@ -1687,6 +1792,50 @@ def init_db():
                 )
             )
         """)
+
+    # Migração v4: construir o mapa por modelo base + fit (idempotente — só se vazio)
+    cursor.execute("SELECT COUNT(*) FROM consumption_map_v4")
+    if cursor.fetchone()[0] == 0:
+        # 1) standards existentes (mapa antigo) reduzidos a base + fit
+        for model, ref, exp, act in cursor.execute(
+                "SELECT model_name, fabric_ref, m_per_pc_expected, m_per_pc_actual FROM consumption_map").fetchall():
+            base, fit = derive_model_fit(model)
+            if base:
+                cursor.execute("INSERT OR IGNORE INTO consumption_map_v4 VALUES (?,?,?,?,?)",
+                               (base, fit, ref, exp, act))
+        # 2) standards/reais derivados dos consumos produtivos (base + fit + ref)
+        agg = {}
+        for model, ref, pcs, mexp, mact in cursor.execute("""
+                SELECT c.model_name, p.fabric_ref, c.pcs_cut, c.metres_expected, c.metres_actual
+                FROM consumptions c JOIN production p ON c.po_garment = p.po_number
+                WHERE c.pcs_cut > 0 AND p.fabric_ref IS NOT NULL""").fetchall():
+            base, fit = derive_model_fit(model)
+            if not base:
+                continue
+            a = agg.setdefault((base, fit, ref), {'e': [], 'a': []})
+            if mexp:
+                a['e'].append(mexp / pcs)
+            if mact:
+                a['a'].append(mact / pcs)
+        for (base, fit, ref), a in agg.items():
+            exp = round(sum(a['e']) / len(a['e']), 2) if a['e'] else None
+            act = round(sum(a['a']) / len(a['a']), 3) if a['a'] else None
+            if exp is None and act is not None:
+                exp = round(act, 2)
+            if exp is not None:
+                cursor.execute("INSERT OR REPLACE INTO consumption_map_v4 VALUES (?,?,?,?,?)",
+                               (base, fit, ref, exp, act))
+        # 3) standard declarado nas POs sem histórico (metres_expected / qty) — prioridade menor
+        agg2 = {}
+        for model, ref, qty, mexp in cursor.execute("""
+                SELECT model_name, fabric_ref, po_qty, metres_expected FROM production
+                WHERE po_qty > 0 AND metres_expected > 0 AND fabric_ref IS NOT NULL""").fetchall():
+            base, fit = derive_model_fit(model)
+            if base:
+                agg2.setdefault((base, fit, ref), []).append(mexp / qty)
+        for (base, fit, ref), vals in agg2.items():
+            cursor.execute("INSERT OR IGNORE INTO consumption_map_v4 VALUES (?,?,?,?,?)",
+                           (base, fit, ref, round(sum(vals) / len(vals), 2), None))
 
     conn.commit()
     conn.close()
@@ -1759,36 +1908,12 @@ def export_stock_detailed():
                         ORDER BY r.ref_code, r.token""")
     return to_excel(df, 'Stock Detalhado')
 
-def get_mpc(model_name, fabric_ref=None):
-    """Consumo por peça. Prefere sempre a média real produtiva; fallback para o standard predefinido.
-    Devolve (m_per_pc, fonte) com fonte = 'real' | 'standard' | None."""
-    q = "SELECT model_name, fabric_ref, m_per_pc_expected, m_per_pc_actual FROM consumption_map"
-    params = []
-    if fabric_ref:
-        q += " WHERE fabric_ref = ?"
-        params.append(fabric_ref)
-    rows = query_to_df(q, params)
-    if rows.empty:
-        return None, None
-    model_lower = str(model_name).lower()
-    for _, r in rows.iterrows():
-        key = str(r['model_name']).lower().replace(' men plain', '').replace(' men checked', '').replace(' men striped', '')
-        if key and key in model_lower:
-            if r['m_per_pc_actual']:
-                return r['m_per_pc_actual'], 'real'
-            return r['m_per_pc_expected'], 'standard'
-    r0 = rows.iloc[0]
-    if r0['m_per_pc_actual']:
-        return r0['m_per_pc_actual'], 'real'
-    return r0['m_per_pc_expected'], 'standard'
-
-
-
-DEV_OK, DEV_WARN = 2.0, 5.0  # limiares de desvio de consumo (%)
-
-def get_standard_mpc(model_name, fabric_ref=None):
-    """m/pc standard (predefinido) para modelo+tecido. Devolve float ou None."""
-    q = "SELECT model_name, fabric_ref, m_per_pc_expected FROM consumption_map"
+def resolve_map_entry(model_name, fabric_ref=None, base_override=None):
+    """Encontra a entrada do mapa v4 para uma PO. Devolve dict {base_model, fit, fabric_ref,
+    m_per_pc_expected, m_per_pc_actual} ou None.
+    Hierarquia: associação manual ('Base|Fit') → base+fit exato → base sem fit →
+    variante de padrão (ex.: '… Plain')."""
+    q = "SELECT base_model, fit, fabric_ref, m_per_pc_expected, m_per_pc_actual FROM consumption_map_v4"
     params = []
     if fabric_ref:
         q += " WHERE fabric_ref = ?"
@@ -1796,12 +1921,58 @@ def get_standard_mpc(model_name, fabric_ref=None):
     rows = query_to_df(q, params)
     if rows.empty:
         return None
-    model_lower = str(model_name).lower()
-    for _, r in rows.iterrows():
-        key = str(r['model_name']).lower().replace(' men plain', '').replace(' men checked', '').replace(' men striped', '')
-        if key and key in model_lower:
-            return r['m_per_pc_expected']
-    return rows.iloc[0]['m_per_pc_expected']
+    if base_override:
+        ob, _, ofit = str(base_override).partition('|')
+        m = rows[(rows['base_model'] == ob) & (rows['fit'] == ofit)]
+        if not m.empty:
+            return m.iloc[0].to_dict()
+    base, fit = derive_model_fit(model_name)
+    if not base:
+        return None
+    bl = base.lower()
+    m = rows[(rows['base_model'].str.lower() == bl) & (rows['fit'].str.lower() == fit.lower())]
+    if m.empty:
+        m = rows[(rows['base_model'].str.lower() == bl) & (rows['fit'] == '')]
+    if m.empty:
+        cand = rows[rows['base_model'].str.lower().str.startswith(bl)]
+        if not cand.empty:
+            plain = cand[cand['base_model'].str.lower().str.contains('plain')]
+            m = (plain if not plain.empty else cand).head(1)
+    if m.empty:
+        return None
+    return m.iloc[0].to_dict()
+
+def get_mpc(model_name, fabric_ref=None, base_override=None):
+    """Consumo por peça. Prefere sempre a média real produtiva; fallback para o standard.
+    Devolve (m_per_pc, fonte) com fonte = 'real' | 'standard' | None."""
+    e = resolve_map_entry(model_name, fabric_ref, base_override)
+    if not e:
+        return None, None
+    act = e['m_per_pc_actual']
+    if act is not None and pd.notna(act) and act > 0:
+        return act, 'real'
+    return e['m_per_pc_expected'], 'standard'
+
+
+
+DEV_OK, DEV_WARN = 2.0, 5.0  # limiares de desvio de consumo (%)
+
+def get_standard_mpc(model_name, fabric_ref=None, base_override=None):
+    """m/pc standard (predefinido) para modelo+tecido. Devolve float ou None."""
+    e = resolve_map_entry(model_name, fabric_ref, base_override)
+    return e['m_per_pc_expected'] if e else None
+
+def update_map_actual(base, fit, fabric_ref):
+    """Recalcula o real médio de uma entrada do mapa v4 a partir dos consumos registados."""
+    cons = query_to_df("""
+        SELECT c.model_name, c.pcs_cut, c.metres_actual
+        FROM consumptions c JOIN production p ON c.po_garment = p.po_number
+        WHERE c.pcs_cut > 0 AND c.metres_actual > 0 AND p.fabric_ref = ?""", (fabric_ref,))
+    vals = [r['metres_actual'] / r['pcs_cut'] for _, r in cons.iterrows()
+            if derive_model_fit(r['model_name']) == (base, fit)]
+    if vals:
+        execute_sql("UPDATE consumption_map_v4 SET m_per_pc_actual = ? WHERE base_model = ? AND fit = ? AND fabric_ref = ?",
+                    (round(sum(vals) / len(vals), 3), base, fit, fabric_ref))
 
 def dev_signal(pct, authorized=0):
     """Chip de sinal de desvio: (texto, classe css). Autorizado sobrepõe o sinal."""
@@ -2405,7 +2576,14 @@ def render_dashboard():
         st.markdown(f'<div class="section-title">{t("d_pos")}</div>', unsafe_allow_html=True)
         st.markdown(f'<div class="section-subtitle">{t("d_pos_sub")}</div>', unsafe_allow_html=True)
 
-        display_df = stock_df[['supplier', 'ref_code', 'description', 'cores', 'disponivel', 'em_processo', 'stock_liquido', 'a_chegar', 'necessidade', 'planeamento', 'status']].copy()
+        # v4: refs sem stock, sem encomendas e sem necessidade ficam escondidas (ruído visual)
+        active_mask = (stock_df['total_stock'] > 0) | (stock_df['a_chegar'] > 0) | (stock_df['necessidade'] > 0)
+        n_hidden = int((~active_mask).sum())
+        show_empty = st.checkbox(t('d_show_empty') + (f' ({n_hidden})' if n_hidden else ''), value=False, key='dash_show_empty')
+        view_df = stock_df if show_empty else stock_df[active_mask]
+        view_df = view_df.sort_values(['planeamento', 'ref_code']).reset_index(drop=True)
+
+        display_df = view_df[['supplier', 'ref_code', 'description', 'cores', 'disponivel', 'em_processo', 'stock_liquido', 'a_chegar', 'necessidade', 'planeamento', 'status']].copy()
 
         def _cores_short(s):
             if not s:
@@ -2664,12 +2842,12 @@ def render_production():
     st.markdown(f'<div class="section-title">{t("p_title")}</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="section-subtitle">{t("p_sub")}</div>', unsafe_allow_html=True)
 
-    tab_live, tab_list, tab_up, tab_status = st.tabs([t('tab_live'), t('tab_edit'), t('tab_upload'), t('tab_status')])
+    tab_live, tab_list, tab_up = st.tabs([t('tab_live'), t('tab_edit'), t('tab_upload')])
 
     # ---------- TAB LIVE ----------
     with tab_live:
         active_pos = query_to_df("""
-            SELECT po_number, model_name, confeccionador, po_qty, fabric_ref, metres_expected, status
+            SELECT po_number, model_name, confeccionador, po_qty, fabric_ref, metres_expected, status, base_model
             FROM production WHERE status IN ('PENDING', 'CUTTING') ORDER BY po_number DESC
         """)
 
@@ -2681,9 +2859,35 @@ def render_production():
                                   format_func=lambda p: f"{p} — {active_pos[active_pos['po_number']==p].iloc[0]['model_name'][:45]}")
 
             po_row = active_pos[active_pos['po_number'] == po_sel].iloc[0]
+            po_base_override = po_row['base_model'] if pd.notna(po_row['base_model']) and po_row['base_model'] else None
 
-            # Consumo: prefere média real produtiva; fallback standard
-            expected_mpc, mpc_source = get_mpc(po_row['model_name'], po_row['fabric_ref'])
+            # Consumo v4: matching por modelo base + fit (associação manual tem prioridade)
+            map_entry = resolve_map_entry(po_row['model_name'], po_row['fabric_ref'], po_base_override)
+            expected_mpc, mpc_source = get_mpc(po_row['model_name'], po_row['fabric_ref'], po_base_override)
+            if expected_mpc is None and po_row['metres_expected'] and po_row['po_qty']:
+                # fallback v4: consumo declarado na própria PO
+                expected_mpc, mpc_source = round(float(po_row['metres_expected']) / float(po_row['po_qty']), 3), 'po'
+
+            if not map_entry:
+                # Alocação inline: associar modelo base à PO sem sair do ecrã
+                st.warning(t('p_no_map'))
+                st.markdown(f'<div class="section-subtitle">{t("p_alloc_inline")}</div>', unsafe_allow_html=True)
+                opts_df = query_to_df("SELECT base_model, fit, fabric_ref, m_per_pc_expected FROM consumption_map_v4 ORDER BY base_model, fit")
+                if not opts_df.empty:
+                    opts_df['lbl'] = opts_df.apply(
+                        lambda r: f"{r['base_model']}{' · ' + r['fit'] if r['fit'] else ''} · {r['fabric_ref']} · {r['m_per_pc_expected']:.2f} m/pc", axis=1)
+                    c1, c2 = st.columns([3, 1])
+                    with c1:
+                        sel_entry = st.selectbox(t('c_alloc_entry'), opts_df['lbl'].tolist(), key='live_alloc_entry')
+                    with c2:
+                        st.markdown('<div style="height:28px"></div>', unsafe_allow_html=True)
+                        do_alloc = st.button(t('b_alloc'), key='live_alloc_go')
+                    if do_alloc and sel_entry:
+                        er = opts_df[opts_df['lbl'] == sel_entry].iloc[0]
+                        execute_sql("UPDATE production SET base_model = ? WHERE po_number = ?",
+                                    (f"{er['base_model']}|{er['fit']}", po_sel))
+                        st.success(t('ok_alloc', po=po_sel, bm=f"{er['base_model']}{' · ' + er['fit'] if er['fit'] else ''}"))
+                        st.rerun()
 
             c1, c2, c3, c4 = st.columns(4)
             with c1:
@@ -2703,7 +2907,10 @@ def render_production():
                 </div>""", unsafe_allow_html=True)
             with c4:
                 mpc_txt = f"{expected_mpc:.2f} m/pc" if expected_mpc else t('no_map')
-                src_txt = {"real": t('src_real'), "standard": t('src_std'), None: ""}.get(mpc_source, "")
+                src_txt = {"real": t('src_real'), "standard": t('src_std'), "po": t('src_po'), None: ""}.get(mpc_source, "")
+                if map_entry:
+                    fit_lbl = f" · {map_entry['fit']}" if map_entry['fit'] else ''
+                    src_txt = f"{map_entry['base_model']}{fit_lbl} · {src_txt}"
                 st.markdown(f"""<div class="info-card" style="text-align:center;">
                     <div class="dev-label">{t('card_cons')}</div>
                     <div style="color:var(--text);font-size:16px;font-weight:600;">{mpc_txt}</div>
@@ -2735,7 +2942,6 @@ def render_production():
                 </div>
                 """, unsafe_allow_html=True)
             elif not expected_mpc:
-                st.warning(t('p_no_map'))
                 real_mpc, dev_pct = (metres_real / pcs_cut if pcs_cut else 0), None
             else:
                 real_mpc, dev_pct = 0, None
@@ -2753,13 +2959,9 @@ def render_production():
                     # Atualiza estado da PO para CUTTING se ainda PENDING
                     if po_row['status'] == 'PENDING':
                         execute_sql("UPDATE production SET status = 'CUTTING' WHERE po_number = ?", (po_sel,))
-                    # Atualiza real médio no mapa
-                    if expected_mpc:
-                        execute_sql("""
-                            UPDATE consumption_map SET m_per_pc_actual = (
-                                SELECT ROUND(AVG(metres_actual / CAST(pcs_cut AS REAL)), 3)
-                                FROM consumptions WHERE pcs_cut > 0 AND model_name = ?)
-                            WHERE model_name = ?""", (po_row['model_name'], po_row['model_name']))
+                    # Atualiza real médio no mapa v4 (modelo base + fit resolvido)
+                    if map_entry:
+                        update_map_actual(map_entry['base_model'], map_entry['fit'], map_entry['fabric_ref'])
                     log_movement('CUT', None, po_row['confeccionador'], po_row['confeccionador'],
                                  po_row['fabric_ref'], metres_real, po_sel,
                                  f"Corte registado: {pcs_cut} pcs, {metres_real:.1f}m, desvio {dev_pct:+.1f}%" if dev_pct is not None else f"Corte registado: {pcs_cut} pcs")
@@ -2767,13 +2969,13 @@ def render_production():
                                (f" | {dev_pct:+.1f}%" if dev_pct is not None else ""))
                     st.rerun()
 
-    # ---------- TAB LISTA (EDITÁVEL) ----------
+    # ---------- TAB LISTA (EDITÁVEL, COM ESTADO DA PO) ----------
     with tab_list:
         st.markdown(f'<div class="section-subtitle">{t("p_edit_sub")}</div>', unsafe_allow_html=True)
         status_filter = st.selectbox(t('p_view'), [t('v_active'), 'PENDING', 'CUTTING', 'INVOICED'], key="prod_filter")
 
         base_q = """SELECT p.po_number, fr.supplier as fornecedor, p.fabric_ref, p.model_name, p.confeccionador,
-                           p.po_qty, p.metres_expected, p.expected_date, p.status
+                           p.po_qty, p.metres_expected, p.expected_date, p.status, p.base_model
                     FROM production p LEFT JOIN fabric_refs fr ON p.fabric_ref = fr.ref_code"""
         if status_filter == t('v_active'):
             q = base_q + " WHERE p.status IN ('PENDING','CUTTING') ORDER BY p.expected_date"
@@ -2783,13 +2985,28 @@ def render_production():
 
         if status_filter == 'INVOICED':
             if not prod_df.empty:
-                clean = safe_display_df(add_total_row(prod_df))
+                clean = safe_display_df(add_total_row(prod_df.drop(columns=['base_model'])))
                 clean.columns = [t('c_po2'), t('c_fsup'), t('c_fref'), t('c_model'), t('c_conf'), t('c_qty'), t('c_metres'), t('c_delivery'), t('c_state')]
                 render_table(clean, height=450)
             else:
                 st.info(t('p_no_inv'))
         else:
             refs_opts = query_to_df("SELECT ref_code FROM fabric_refs ORDER BY ref_code")['ref_code'].tolist()
+            # Colunas informativas v4: modelo base resolvido + consumo m/pc (só leitura)
+            if not prod_df.empty:
+                def _bm_lbl(r):
+                    if pd.notna(r['base_model']) and r['base_model']:
+                        return r['base_model'].replace('|', ' · ')
+                    b, f = derive_model_fit(r['model_name'])
+                    return b + (f' · {f}' if f else '')
+                prod_df['modelo_base'] = prod_df.apply(_bm_lbl, axis=1)
+                def _po_mpc(r):
+                    v = get_mpc(r['model_name'], r['fabric_ref'],
+                                r['base_model'] if pd.notna(r['base_model']) and r['base_model'] else None)[0]
+                    if v is None and r['metres_expected'] and r['po_qty']:
+                        v = round(float(r['metres_expected']) / float(r['po_qty']), 3)
+                    return v
+                prod_df['mpc'] = prod_df.apply(_po_mpc, axis=1)
             edited = st.data_editor(
                 prod_df,
                 use_container_width=True, hide_index=True, num_rows="dynamic", height=450,
@@ -2802,87 +3019,219 @@ def render_production():
                     "po_qty": st.column_config.NumberColumn(t('c_qty'), min_value=0, step=1, required=True),
                     "metres_expected": st.column_config.NumberColumn(t('c_metres'), min_value=0.0, step=0.1, format="%.1f"),
                     "expected_date": st.column_config.TextColumn(t('c_delivery')),
-                    "status": st.column_config.SelectboxColumn(t('c_state'), options=['PENDING', 'CUTTING'], required=True),
+                    "status": st.column_config.SelectboxColumn(t('c_state'), options=PROD_STATUSES, required=True),
+                    "base_model": None,
+                    "modelo_base": st.column_config.TextColumn(t('c_basemodel'), disabled=True),
+                    "mpc": st.column_config.NumberColumn(t('c_mpc_col'), format="%.2f", disabled=True),
                 },
                 key="prod_editor")
             total_m = pd.to_numeric(edited['metres_expected'], errors='coerce').fillna(0).sum()
-            st.markdown(f'<div class="section-subtitle">{len(edited)} POs | {total_m:,.0f}m esperados</div>', unsafe_allow_html=True)
+            n_sem_mapa = int(edited['mpc'].isna().sum()) if 'mpc' in edited.columns else 0
+            sub_txt = f'{len(edited)} POs | {total_m:,.0f}m esperados'
+            if n_sem_mapa:
+                sub_txt += f' | ⚠️ {n_sem_mapa} {t("no_map")} — {t("c_alloc_title")} (📊 Consumos)'
+            st.markdown(f'<div class="section-subtitle">{sub_txt}</div>', unsafe_allow_html=True)
 
             if st.button(t('b_save_prod'), key="prod_save"):
                 edited = edited.dropna(subset=['po_number'])
                 edited = edited[edited['po_number'].astype(str).str.strip() != '']
                 conn = sqlite3.connect(DB_PATH)
                 cur = conn.cursor()
-                cur.execute("SELECT po_number FROM production WHERE status != 'INVOICED'")
-                existing = {r[0] for r in cur.fetchall()}
-                cur.execute("SELECT po_number FROM production WHERE status = 'INVOICED'")
-                invoiced_pos = {r[0] for r in cur.fetchall()}
+                cur.execute("SELECT po_number, status, base_model FROM production")
+                prev = {r[0]: (r[1], r[2]) for r in cur.fetchall()}
+                invoiced_pos = {p for p, (stt, _) in prev.items() if stt == 'INVOICED'}
+                existing = set(prev) - invoiced_pos
                 keep = set(edited['po_number'].astype(str))
                 for po_del in existing - keep:
                     cur.execute("DELETE FROM production WHERE po_number = ? AND status != 'INVOICED'", (po_del,))
-                n = 0
+                n = n_inv = 0
+                now_iso = datetime.now().isoformat()
+                pending_logs = []  # movimentos registados só depois do commit (evita locks SQLite)
                 for _, r in edited.iterrows():
                     po_val = str(r['po_number']).strip()
                     if po_val in invoiced_pos:
                         continue
                     qty = 0 if pd.isna(r['po_qty']) else int(r['po_qty'])
                     m_val = 0.0 if pd.isna(r['metres_expected']) else float(r['metres_expected'])
-                    cur.execute("INSERT OR REPLACE INTO production VALUES (?,?,?,?,?,?,?,?,?)",
+                    prev_st, prev_bm = prev.get(po_val, (None, None))
+                    new_st = r['status'] if r['status'] in PROD_STATUSES else 'PENDING'
+                    # v4: metros em falta → qty × standard do modelo base
+                    if m_val <= 0 and qty > 0 and r['fabric_ref']:
+                        std = get_standard_mpc(r['model_name'], r['fabric_ref'], prev_bm)
+                        if std:
+                            m_val = round(qty * std, 1)
+                    # v4: estado INVOICED na tabela faz a baixa automática (ex-"Mudar Estado PO")
+                    if new_st == 'INVOICED' and prev_st != 'INVOICED':
+                        cur.execute("SELECT COALESCE(SUM(metres),0) FROM fabric_rolls WHERE po_garment = ? AND status = 'IN_PROCESS'", (po_val,))
+                        invoiced_m = cur.fetchone()[0]
+                        cur.execute("UPDATE fabric_rolls SET status = 'INVOICED', notes = 'Faturado — saiu de em processo' WHERE po_garment = ? AND status = 'IN_PROCESS'", (po_val,))
+                        pending_logs.append(('INVOICE', None, 'Em Processo', 'Faturado', None, invoiced_m, po_val, f'{invoiced_m:.1f}m faturados'))
+                        n_inv += 1
+                    elif new_st != prev_st and prev_st is not None:
+                        pending_logs.append(('STATUS', None, None, None, None, None, po_val, f'Estado → {new_st}'))
+                    cur.execute("""INSERT OR REPLACE INTO production
+                                   (po_number, model_name, confeccionador, po_qty, fabric_ref, metres_expected,
+                                    expected_date, status, date_created, base_model)
+                                   VALUES (?,?,?,?,?,?,?,?,?,?)""",
                                 (po_val, r['model_name'], r['confeccionador'], qty, r['fabric_ref'],
                                  m_val, r['expected_date'] if pd.notna(r['expected_date']) else None,
-                                 r['status'] or 'PENDING', datetime.now().isoformat()))
+                                 new_st, now_iso, prev_bm))
                     n += 1
                 conn.commit()
                 conn.close()
+                for lg in pending_logs:
+                    log_movement(*lg)
                 log_movement('EDIT', None, None, None, None, None, None, f'Tabela de produção atualizada ({n} POs)')
-                st.success(t('ok_prod', n=n))
+                msg = t('ok_prod', n=n) + (t('ok_prod_inv', n=n_inv) if n_inv else '')
+                st.success(msg)
                 st.rerun()
 
-    # ---------- TAB STATUS ----------
     # ---------- TAB CARREGAR POs (EXCEL/CSV) ----------
     with tab_up:
         st.markdown(f'<div class="section-subtitle">{t("up_sub_g")}</div>', unsafe_allow_html=True)
         upload_section('garment')
 
-    with tab_status:
-        st.markdown(f'<div class="section-subtitle">{t("p_status_sub")}</div>', unsafe_allow_html=True)
-        all_pos = query_to_df("SELECT po_number, model_name, confeccionador, status FROM production ORDER BY po_number DESC")
-        if not all_pos.empty:
-            col1, col2 = st.columns(2)
-            with col1:
-                po_st = st.selectbox(t('c_po'), all_pos['po_number'].tolist(), key="status_po",
-                                     format_func=lambda p: f"{p} — {all_pos[all_pos['po_number']==p].iloc[0]['status']}")
-            with col2:
-                new_status = st.selectbox(t('p_new_status'), PROD_STATUSES, key="status_new")
 
-            if st.button(t('b_apply_status'), key="status_apply"):
-                if new_status == 'INVOICED':
-                    # Baixa automática: metros em processo ligados à PO saem do stock
-                    inv = query_to_df("SELECT COALESCE(SUM(metres),0) as m FROM fabric_rolls WHERE po_garment = ? AND status = 'IN_PROCESS'", (po_st,))
-                    invoiced_m = inv.iloc[0]['m']
-                    execute_sql("UPDATE fabric_rolls SET status = 'INVOICED', notes = 'Faturado — saiu de em processo' WHERE po_garment = ? AND status = 'IN_PROCESS'", (po_st,))
-                    execute_sql("UPDATE production SET status = 'INVOICED' WHERE po_number = ?", (po_st,))
-                    log_movement('INVOICE', None, 'Em Processo', 'Faturado', None, invoiced_m, po_st, f'{invoiced_m:.1f}m faturados')
-                    st.success(t('ok_inv', po=po_st, m=f"{invoiced_m:,.1f}"))
-                else:
-                    execute_sql("UPDATE production SET status = ? WHERE po_number = ?", (new_status, po_st))
-                    log_movement('STATUS', None, None, None, None, None, po_st, f'Estado → {new_status}')
-                    st.success(t('ok_status', po=po_st, st=new_status))
-                st.rerun()
-
-
-# ===================== UI: CONSUMOS =====================
+# ===================== UI: CONSUMOS (v4 — por modelo base + fit) =====================
 def render_consumos():
     st.markdown(f'<div class="section-title">{t("c_title")}</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="section-subtitle">{t("c_sub")}</div>', unsafe_allow_html=True)
 
-    tab_run, tab_real, tab_map, tab_edit = st.tabs([t('c_tab_running'), t('c_tab_real'), t('c_tab_map'), t('c_tab_edit')])
+    tab_modelos, tab_andamento = st.tabs([t('c_tab_modelos'), t('c_tab_andamento')])
 
-    # ---------- TAB EM CURSO (quadro visual de POs) ----------
-    with tab_run:
-        st.markdown(f'<div class="section-subtitle">{t("c_running_sub")}</div>', unsafe_allow_html=True)
+    # ---------- TAB MAPA POR MODELO (visual + edição + associações) ----------
+    with tab_modelos:
+        st.markdown(f'<div class="section-subtitle">{t("c_map_sub")}</div>', unsafe_allow_html=True)
+        cm_df = query_to_df("""
+            SELECT base_model, fit, fabric_ref, m_per_pc_expected, m_per_pc_actual
+            FROM consumption_map_v4 ORDER BY base_model, fit, fabric_ref
+        """)
+        if not cm_df.empty:
+            st.markdown(f'<div style="display:flex;gap:24px;margin-bottom:12px;font-size:12px;color:var(--muted);"><span>{t("lg_exp")}</span><span>{t("lg_real")}</span><span>{t("lg_dev")}</span></div>', unsafe_allow_html=True)
+            rows_html = ""
+            for base, grp in cm_df.groupby('base_model', sort=True):
+                refs_lbl = ', '.join(sorted(set(grp['fabric_ref'])))
+                rows_html += f'<div class="consumo-base"><span>👕 {html.escape(str(base))}</span><span class="cb-meta">{len(grp)} · {html.escape(refs_lbl)}</span></div>'
+                for _, row in grp.iterrows():
+                    expected = row['m_per_pc_expected'] or 0
+                    actual = row['m_per_pc_actual'] if pd.notna(row['m_per_pc_actual']) and row['m_per_pc_actual'] else 0
+                    fit_lbl = f'<span class="fit-tag">{html.escape(str(row["fit"]))}</span>' if row['fit'] else '<span class="fit-tag" style="background:var(--border);color:var(--faint);">std</span>'
+                    if expected > 0 and actual > 0:
+                        dev = ((actual - expected) / expected) * 100
+                        bar_width = min(100, max(50, (actual / expected) * 85))
+                        bar_color = "#ef4444" if abs(dev) > 5 else "#22c55e"
+                        var_class = "up" if dev > 0 else "down"
+                        badge = '<span class="badge" style="background:rgba(239,68,68,0.15);color:#ef4444;">⚠️ desvio</span>' if abs(dev) > 5 else '<span class="badge available">ok</span>'
+                        dev_txt = f"{dev:+.1f}%"
+                        act_txt = f"{actual:.2f} m/pc"
+                    else:
+                        bar_width, bar_color, var_class, dev_txt = 50, "#3b82f6", "", "—"
+                        act_txt = t('c_nodata')
+                        badge = '<span class="badge" style="background:rgba(100,116,139,0.15);color:var(--faint);">—</span>'
+                    rows_html += f"""
+                    <div class="consumo-row fit-row">
+                        <div class="consumo-model">{fit_lbl}{html.escape(str(row['fabric_ref']))}</div>
+                        <div class="consumo-fabric"></div>
+                        <div class="consumo-val">{expected:.2f} m/pc</div>
+                        <div class="consumo-bar-bg"><div class="consumo-bar-fill" style="width:{bar_width}%;background:{bar_color};"></div></div>
+                        <div class="consumo-val">{act_txt}</div>
+                        <div class="consumo-var {var_class}">{dev_txt}</div>
+                        {badge}
+                    </div>"""
+            st.markdown(rows_html, unsafe_allow_html=True)
+        else:
+            st.info(t('c_none'))
+
+        # ✏️ Editar mapa v4
+        with st.expander(t('c_tab_edit')):
+            st.markdown(f'<div class="section-subtitle">{t("c_edit_sub")}</div>', unsafe_allow_html=True)
+            refs_db = query_to_df("SELECT ref_code FROM fabric_refs ORDER BY ref_code")['ref_code'].tolist()
+            edited_cm = st.data_editor(
+                cm_df,
+                use_container_width=True, hide_index=True, num_rows="dynamic",
+                column_config={
+                    "base_model": st.column_config.TextColumn(t('c_basemodel'), required=True),
+                    "fit": st.column_config.TextColumn(t('c_fit')),
+                    "fabric_ref": st.column_config.SelectboxColumn(t('c_fref'), options=refs_db, required=True),
+                    "m_per_pc_expected": st.column_config.NumberColumn(t('ec_exp'), min_value=0.0, step=0.01, format="%.2f", required=True),
+                    "m_per_pc_actual": st.column_config.NumberColumn(t('ec_real'), min_value=0.0, step=0.01, format="%.3f"),
+                },
+                key="cm_editor")
+            if st.button(t('b_save_cm'), key="cm_save"):
+                execute_sql("DELETE FROM consumption_map_v4")
+                rows = [(str(r['base_model']).strip(), str(r['fit'] or '').strip(), r['fabric_ref'],
+                         r['m_per_pc_expected'], r['m_per_pc_actual'])
+                        for _, r in edited_cm.iterrows()
+                        if str(r['base_model'] or '').strip() and r['fabric_ref'] and r['m_per_pc_expected']]
+                execute_many("INSERT OR REPLACE INTO consumption_map_v4 VALUES (?,?,?,?,?)", rows)
+                st.success(t('ok_cm', n=len(rows)))
+                st.rerun()
+
+        # 🔗 Associar modelo base a POs
+        with st.expander(t('c_alloc_title')):
+            st.markdown(f'<div class="section-subtitle">{t("c_alloc_sub")}</div>', unsafe_allow_html=True)
+            pos = query_to_df("""
+                SELECT po_number, model_name, fabric_ref, base_model, status
+                FROM production WHERE status != 'INVOICED' ORDER BY po_number DESC
+            """)
+            if pos.empty:
+                st.info(t('c_none'))
+            else:
+                # estado da associação de cada PO ativa
+                assoc_rows = []
+                for _, r in pos.iterrows():
+                    override = r['base_model'] if pd.notna(r['base_model']) and r['base_model'] else None
+                    e = resolve_map_entry(r['model_name'], r['fabric_ref'], override)
+                    b, f = derive_model_fit(r['model_name'])
+                    if override:
+                        src = t('c_src_manual')
+                        lbl = override.replace('|', ' · ')
+                    elif e:
+                        src = t('c_src_auto')
+                        lbl = b + (f' · {f}' if f else '')
+                    else:
+                        src = t('c_src_missing')
+                        lbl = b + (f' · {f}' if f else '')
+                    assoc_rows.append({'po': r['po_number'], 'modelo': r['model_name'],
+                                       'ref': r['fabric_ref'], 'base': lbl,
+                                       'mpc': e['m_per_pc_expected'] if e else None, 'fonte': src})
+                assoc_df = pd.DataFrame(assoc_rows)
+                n_missing = int((assoc_df['fonte'] == t('c_src_missing')).sum())
+                if n_missing:
+                    st.markdown(f'<div class="alert-bar"><div class="alert-chip warning"><span class="alert-dot"></span>{n_missing} {t("c_src_missing")}</div></div>', unsafe_allow_html=True)
+                assoc_disp = safe_display_df(assoc_df)
+                assoc_disp.columns = [t('c_po2'), t('c_model'), t('c_fref'), t('c_basemodel'), t('c_mpc_col'), t('c_signal')]
+                render_table(assoc_disp, height=300)
+
+                # alterar/criar associação
+                opts_df = query_to_df("SELECT base_model, fit, fabric_ref, m_per_pc_expected FROM consumption_map_v4 ORDER BY base_model, fit")
+                if not opts_df.empty:
+                    opts_df['lbl'] = opts_df.apply(
+                        lambda r: f"{r['base_model']}{' · ' + r['fit'] if r['fit'] else ''} · {r['fabric_ref']} · {r['m_per_pc_expected']:.2f} m/pc", axis=1)
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        po_pick = st.selectbox(t('c_alloc_po'), pos['po_number'].tolist(), key='alloc_po',
+                                               format_func=lambda p: f"{p} — {pos[pos['po_number']==p].iloc[0]['model_name'][:40]}")
+                    with c2:
+                        entry_pick = st.selectbox(t('c_alloc_entry'), opts_df['lbl'].tolist(), key='alloc_entry')
+                    if st.button(t('b_alloc'), key='alloc_go'):
+                        er = opts_df[opts_df['lbl'] == entry_pick].iloc[0]
+                        execute_sql("UPDATE production SET base_model = ? WHERE po_number = ?",
+                                    (f"{er['base_model']}|{er['fit']}", po_pick))
+                        st.success(t('ok_alloc', po=po_pick, bm=f"{er['base_model']}{' · ' + er['fit'] if er['fit'] else ''}"))
+                        st.rerun()
+
+    # ---------- TAB ANDAMENTO & REGISTOS ----------
+    with tab_andamento:
+        st.markdown(f'<div class="section-subtitle">{t("c_prog_sub")}</div>', unsafe_allow_html=True)
+        _render_andamento()
+        st.markdown("---")
+        _render_registos()
+
+
+def _render_andamento():
         run_df = query_to_df("""
-            SELECT p.po_number, p.model_name, p.confeccionador, p.po_qty, p.fabric_ref,
+            SELECT p.po_number, p.model_name, p.confeccionador, p.po_qty, p.fabric_ref, p.base_model, p.metres_expected,
                    COALESCE(SUM(c.pcs_cut), 0) AS pcs_cut,
                    COALESCE(SUM(c.metres_actual), 0) AS m_used,
                    COALESCE(SUM(CASE WHEN c.authorized = 1 THEN MAX(0, c.metres_actual - COALESCE(c.metres_expected, 0)) ELSE 0 END), 0) AS auth_extra,
@@ -2899,7 +3248,10 @@ def render_consumos():
             cards = []
             n_ok = n_warn = n_bad = n_authd = n_start = 0
             for _, r in run_df.iterrows():
-                std = get_standard_mpc(r['model_name'], r['fabric_ref'])
+                std = get_standard_mpc(r['model_name'], r['fabric_ref'],
+                                       r['base_model'] if pd.notna(r['base_model']) and r['base_model'] else None)
+                if std is None and r['metres_expected'] and r['po_qty']:
+                    std = round(float(r['metres_expected']) / float(r['po_qty']), 3)
                 pcs_cut, po_qty = float(r['pcs_cut']), float(r['po_qty'])
                 auth_extra, n_a = float(r['auth_extra']), int(r['n_auth'])
                 adj_used = float(r['m_used']) - auth_extra
@@ -2960,8 +3312,7 @@ def render_consumos():
             cards.sort(key=lambda x: x[0])
             st.markdown('<div class="po-grid">' + ''.join(h for _, h in cards) + '</div>', unsafe_allow_html=True)
 
-    # ---------- TAB REGISTOS ----------
-    with tab_real:
+def _render_registos():
         cons_df = query_to_df("SELECT * FROM consumptions ORDER BY date_cut DESC, id DESC")
         if not cons_df.empty:
             cons_df['authorized'] = cons_df['authorized'].fillna(0).astype(int)
@@ -3020,68 +3371,6 @@ def render_consumos():
             download_pair(cons_df, f"consumos_{datetime.now().strftime('%Y%m%d')}", 'Consumos', 'cons_dl')
         else:
             st.info(t('c_none'))
-
-    # ---------- TAB MAPA VISUAL ----------
-    with tab_map:
-        cm_df = query_to_df("""
-            SELECT cm.model_name, cm.fabric_ref, cm.m_per_pc_expected, cm.m_per_pc_actual
-            FROM consumption_map cm ORDER BY cm.fabric_ref, cm.model_name
-        """)
-        if not cm_df.empty:
-            st.markdown(f'<div style="display:flex;gap:24px;margin-bottom:12px;font-size:12px;color:var(--muted);"><span>{t("lg_exp")}</span><span>{t("lg_real")}</span><span>{t("lg_dev")}</span></div>', unsafe_allow_html=True)
-            rows_html = ""
-            for _, row in cm_df.iterrows():
-                expected = row['m_per_pc_expected'] or 0
-                actual = row['m_per_pc_actual'] or 0
-                if expected > 0 and actual > 0:
-                    dev = ((actual - expected) / expected) * 100
-                    bar_width = min(100, max(50, (actual / expected) * 85))
-                    bar_color = "#ef4444" if abs(dev) > 5 else "#22c55e"
-                    var_class = "up" if dev > 0 else "down"
-                    badge = '<span class="badge" style="background:rgba(239,68,68,0.15);color:#ef4444;">⚠️ desvio</span>' if abs(dev) > 5 else '<span class="badge available">ok</span>'
-                    dev_txt = f"{dev:+.1f}%"
-                    act_txt = f"{actual:.2f} m/pc"
-                else:
-                    bar_width, bar_color, var_class, dev_txt = 50, "#3b82f6", "", "—"
-                    act_txt = t('c_nodata')
-                    badge = '<span class="badge" style="background:rgba(100,116,139,0.15);color:var(--faint);">—</span>'
-                rows_html += f"""
-                <div class="consumo-row">
-                    <div class="consumo-model">{row['model_name']}</div>
-                    <div class="consumo-fabric">{row['fabric_ref']}</div>
-                    <div class="consumo-val">{expected:.2f} m/pc</div>
-                    <div class="consumo-bar-bg"><div class="consumo-bar-fill" style="width:{bar_width}%;background:{bar_color};"></div></div>
-                    <div class="consumo-val">{act_txt}</div>
-                    <div class="consumo-var {var_class}">{dev_txt}</div>
-                    {badge}
-                </div>"""
-            st.markdown(rows_html, unsafe_allow_html=True)
-
-    # ---------- TAB EDITAR MAPA ----------
-    with tab_edit:
-        st.markdown(f'<div class="section-subtitle">{t("c_edit_sub")}</div>', unsafe_allow_html=True)
-        cm_edit = query_to_df("SELECT model_name, fabric_ref, m_per_pc_expected, m_per_pc_actual FROM consumption_map ORDER BY fabric_ref, model_name")
-        edited = st.data_editor(
-            cm_edit,
-            use_container_width=True,
-            hide_index=True,
-            num_rows="dynamic",
-            column_config={
-                "model_name": st.column_config.TextColumn(t('c_model'), required=True),
-                "fabric_ref": st.column_config.SelectboxColumn(t('c_fref'), options=[r[0] for r in FABRIC_REFS], required=True),
-                "m_per_pc_expected": st.column_config.NumberColumn(t('ec_exp'), min_value=0.0, step=0.01, format="%.2f", required=True),
-                "m_per_pc_actual": st.column_config.NumberColumn(t('ec_real'), min_value=0.0, step=0.01, format="%.3f"),
-            },
-            key="cm_editor"
-        )
-        if st.button(t('b_save_cm'), key="cm_save"):
-            execute_sql("DELETE FROM consumption_map")
-            rows = [(r['model_name'], r['fabric_ref'], r['m_per_pc_expected'], r['m_per_pc_actual'])
-                    for _, r in edited.iterrows() if r['model_name'] and r['fabric_ref'] and r['m_per_pc_expected']]
-            execute_many("INSERT OR REPLACE INTO consumption_map VALUES (?,?,?,?)", rows)
-            st.success(t('ok_cm', n=len(rows)))
-            st.rerun()
-
 
 # ===================== UI: MOVEMENT (3 MODOS) =====================
 def render_movement():
@@ -3517,7 +3806,7 @@ def main():
     st.sidebar.markdown(f"""
     <div style="position:fixed;bottom:20px;left:20px;right:20px;">
         <div style="border-top:1px solid var(--line);padding-top:12px;color:var(--faint);font-size:11px;text-align:center;">
-            v3.10 | {t('sb_data')}<br>{datetime.now().strftime('%Y-%m-%d')}<br>
+            v4.0 | {t('sb_data')}<br>{datetime.now().strftime('%Y-%m-%d')}<br>
             <span style="color:#3b82f6;font-weight:600;">SNT CMT</span>
         </div>
     </div>

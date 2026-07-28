@@ -1,7 +1,26 @@
-# SNT CMT — Sistema de Stock & Produção v3.10
+# SNT CMT — Sistema de Stock & Produção v4.0
 
 Sistema de gestão de stock de tecidos, encomendas garment e consumos para a SNT.
 Dados reais carregados: CW29 2026.
+
+## v4.0 — Consumos por modelo base + fit · Produção unificada · Dashboard limpo
+
+| Pedido | Implementação |
+|---|---|
+| **1) Rolos/packings intocados** | Seeds de rolos, lotes de confeccionadores e consumos reais **byte-a-byte iguais** à v3.10. Mesma BD `snt_cmt_v37.db` — as migrações v4 correm no arranque e não perdem nada (total validado: 103.058,79m / 397 rolos) |
+| **2) Consumos reformulados** | O consumo deixou de estar preso à **cor** do modelo: novo mapa por **modelo base + fit** (`consumption_map_v4`). "Ease Pants Black Slim", "Ease Pants Blue Nights Slim"… → uma entrada **Ease Pants · Slim** (std 1,30 · real 1,346). O menu Consumos passa de 4 submenus repetitivos para **2 ecrãs**: 📊 **Mapa por Modelo** (visual agrupado por modelo base, edição da grelha e associações PO↔modelo) e 🏃 **Andamento & Registos** (guia só-leitura das produções em corte com nota de desvios + registos reais + autorizações — tudo num só sítio) |
+| **2b) Modelo base por PO** | Deteção **automática** a partir do nome da PO (remove cor, "(Use all fabric)", "Men/Women"); quando não encontra, podes **alocar manualmente** — em Consumos → 🔗 Modelo base das POs, ou inline no Modo Live. A associação fica guardada na PO (`base_model`) e tem prioridade sobre a deteção |
+| **3a) Consumo esperado corrigido** | O bug: o match antigo comparava o nome completo (com cor) e caía num fallback errado. Agora resolve por base+fit com hierarquia (manual → base+fit → base → variante Plain) e, sem mapa, usa o **standard declarado na própria PO** (metros ÷ qty, badge 📋). Resultado: **60/60 POs com consumo esperado** |
+| **3b) Produção sem menus repetidos** | A ✏️ **Tabela de Produção** passa a ter a coluna **Estado** (PENDING/CUTTING/INVOICED) — mudar para INVOICED faz a baixa automática dos metros em processo (com movimento INVOICE). O separador "🔄 Mudar Estado PO" foi **removido**. Novas colunas só-leitura: **Modelo Base** e **m/pc** resolvido; metros em falta são auto-calculados (qty × standard) ao gravar |
+| **4) Dashboard limpo** | Refs sem stock, sem encomendas e sem necessidade (Carreman-Garco, Delegant, TC6677…) deixam de poluir a posição de stock — ficam escondidas por omissão, com checkbox "Mostrar refs sem stock nem movimento" para as ver. Tabela ordenada por planeamento (críticos primeiro) |
+
+### Notas técnicas v4
+- Nova tabela `consumption_map_v4 (base_model, fit, fabric_ref, m_per_pc_expected, m_per_pc_actual)` construída uma vez a partir do mapa antigo + consumos reais + standards declarados nas POs.
+- Nova coluna `production.base_model` ('Base|Fit'; NULL = deteção automática).
+- Função-chave nova: `derive_model_fit()` — reduz qualquer nome comercial a (modelo base, fit).
+- O mapa antigo `consumption_map` fica intacto na BD (não é usado pela v4).
+
+---
 
 ## v3.10 — Packing lists: rolos individuais em lote para o armazém
 
