@@ -1,3 +1,16 @@
+## v4.1 — Cor na PO garment · Metragem por cor · Packing Riopele
+
+| Pedido | Implementação |
+|---|---|
+| **Cor na PO garment** | Nova coluna `production.color` (migração automática). O upload CSV de POs garment passa a **gravar** a cor (antes era só validada e descartada). Editável na ✏️ Tabela de Produção, visível no ⚡ Modo Live, e os lotes consolidados (Movimentar → 📦 Consolidar) com PO ligada **herdam a cor da PO** |
+| **Dashboard: cada cor com a sua metragem** | Nova vista expansível **🔎 Metragem por cor** por baixo da posição de stock: ref + cor com disponível, em processo e total exatos |
+| **4 packings Riopele "Report 1"** | O upload de packing list deteta automaticamente o formato Riopele (Lote/Material/Acabamento/Cor/Remessa/Líquido/Recebedor): ref = Material/Acabamento (TCB25800051 + EC1 → `TCB258/EC1`), códigos de cor resolvidos para o nome oficial (1049 → Medium Beige Melange 1049; 0318 → Dark Grey 0318 ⚠️ ambíguo com "Dark Grey Melange 0318" — verifica após importar), destino pelo recebedor (Samidel ✓, Costa Correia ✓; "Costa e Silva e Nascimento" ⚠️ desconhecido → armazém selecionado). Os 4 ficheiros testados: **82 rolos · 3.470,7m** |
+
+### Como corrigir a PO Carreman-Azic (126m sem cor)
+A PO `POAPS2000004232` (Women Ashryn Blazer, 126m) aponta para a ref `Carreman-Azic`, mas o stock desse artigo está nas refs **GZIC GR4 / GZIC GR5 / GZIC 002** (Samidel + XBS — ver o teu Fabric audit). Com a v4.1: **Produção → ✏️ Tabela de Produção** → nessa PO muda **Ref Tecido** para a ref GZIC correta e escreve a **Cor** → 💾 Guardar. A necessidade de 126m passa a contar contra a ref certa e o dashboard deixa de mostrar a linha sem cor.
+
+---
+
 # SNT CMT — Sistema de Stock & Produção v4.0
 
 Sistema de gestão de stock de tecidos, encomendas garment e consumos para a SNT.

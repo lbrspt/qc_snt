@@ -1,6 +1,13 @@
 """
-SNT CMT - Sistema de Stock & Produção v4.0
+SNT CMT - Sistema de Stock & Produção v4.1
 Dados reais CW29 2026
+v4.1:
+- Cor na PO garment: nova coluna production.color — gravada no upload CSV, editável na
+  Tabela de Produção, mostrada no Modo Live e herdada pelos lotes consolidados com PO ligada
+- Dashboard: nova vista "Metragem por cor" (disponível + em processo por ref e cor)
+- Packing list: suporte nativo ao formato Riopele "Report 1" (Lote/Material/Cor/Remessa/Líquido)
+  com deteção automática, ref Material/Acabamento, códigos de cor resolvidos para o nome oficial
+  e destino pelo recebedor (Samidel, Costa Correia…)
 v4.0:
 - Consumos reestruturados por MODELO BASE + FIT (a cor sai do consumo): mapa v4,
   deteção automática do modelo a partir do nome da PO e associação manual PO ↔ modelo base
@@ -441,7 +448,7 @@ T = {
  'm_tools': '🛠 Ferramentas',
  'sb_system': 'Sistema de Stock & Produção', 'sb_nav': 'Navegar', 'sb_data': 'Dados: CW29 2026',
  'sb_theme': '🎨 Tema', 'sb_lang': '🌐 Idioma',
- 'h_sub': 'Sistema de Stock & Produção v4.0 | CW29 2026',
+ 'h_sub': 'Sistema de Stock & Produção v4.1 | CW29 2026',
  'no_data': 'Sem dados para mostrar.',
  'k_avail': 'STOCK DISPONÍVEL', 'k_avail_d': 'armazém + stock conf.',
  'k_process': 'EM PROCESSO (CONF.)', 'k_process_d': 'POs garment ativas',
@@ -568,6 +575,11 @@ T = {
  'c_src_auto': 'auto', 'c_src_manual': 'manual', 'c_src_missing': '⚠️ sem mapa',
  'p_alloc_inline': 'Para teres consumo esperado e validação de desvio, associa esta PO a um modelo base do mapa:',
  'd_show_empty': 'Mostrar refs sem stock nem movimento',
+ 'd_color_br': '🔎 Metragem por cor',
+ 'd_color_br_sub': 'disponível + em processo por referência e cor — cada cor com a sua metragem exata',
+ 'pk_rio': '📄 formato packing Riopele detetado — {n} rolos lidos',
+ 'pk_dest': 'Destino', 'pk_recv_unknown': 'recebedor "{r}" não é confeccionador conhecido — entra em {wh}',
+ 'pk_color_map': 'código de cor {c} → {k}',
  'c_tab_running': '🏃 Em Curso',
  'c_tab_map': '📊 Mapa Visual', 'c_tab_real': '🧾 Registos Reais', 'c_tab_edit': '✏️ Editar Mapa',
  'c_running_sub': 'POs em corte comparadas com o standard — barra = progresso de corte · chip = desvio m/pc (já descontando extras autorizados) · projeção de metros extra no fim da PO.',
@@ -647,7 +659,7 @@ T = {
  'm_tools': '🛠 Tools',
  'sb_system': 'Fabric Stock & Production System', 'sb_nav': 'Navigate', 'sb_data': 'Data: CW29 2026',
  'sb_theme': '🎨 Theme', 'sb_lang': '🌐 Language',
- 'h_sub': 'Fabric Stock & Production System v4.0 | CW29 2026',
+ 'h_sub': 'Fabric Stock & Production System v4.1 | CW29 2026',
  'no_data': 'No data to display.',
  'k_avail': 'AVAILABLE STOCK', 'k_avail_d': 'warehouse + conf. stock',
  'k_process': 'IN PROCESS (CONF.)', 'k_process_d': 'active garment POs',
@@ -774,6 +786,11 @@ T = {
  'c_src_auto': 'auto', 'c_src_manual': 'manual', 'c_src_missing': '⚠️ no map',
  'p_alloc_inline': 'To get expected consumption and deviation validation, link this PO to a map base model:',
  'd_show_empty': 'Show refs with no stock or movement',
+ 'd_color_br': '🔎 Metrage by colour',
+ 'd_color_br_sub': 'available + in process by reference and colour — exact metres for each colour',
+ 'pk_rio': '📄 Riopele packing format detected — {n} rolls read',
+ 'pk_dest': 'Destination', 'pk_recv_unknown': 'receiver "{r}" is not a known contractor — goes to {wh}',
+ 'pk_color_map': 'colour code {c} → {k}',
  'c_tab_running': '🏃 Running',
  'c_tab_map': '📊 Visual Map', 'c_tab_real': '🧾 Actual Records', 'c_tab_edit': '✏️ Edit Map',
  'c_running_sub': 'POs being cut vs standard — bar = cutting progress · chip = m/pc deviation (net of authorized extras) · projected extra metres at PO completion.',
@@ -1726,6 +1743,9 @@ def init_db():
     prod_cols = [r[1] for r in cursor.fetchall()]
     if 'base_model' not in prod_cols:
         cursor.execute("ALTER TABLE production ADD COLUMN base_model TEXT")
+    # Migração v4.1: cor da PO garment (o upload CSV validava-a mas descartava-a)
+    if 'color' not in prod_cols:
+        cursor.execute("ALTER TABLE production ADD COLUMN color TEXT")
 
     # Consistência v3.8: PO com cortes registados está em CUTTING
     cursor.execute("""UPDATE production SET status = 'CUTTING' WHERE status = 'PENDING'
@@ -2253,9 +2273,9 @@ def upload_section(kind):
         if is_g:
             for ref in sorted({r['fabric_ref'] for r in ok_rows} - set(query_to_df("SELECT ref_code FROM fabric_refs")['ref_code'])):
                 execute_sql("INSERT OR IGNORE INTO fabric_refs VALUES (?,?,?,?,?)", (ref, None, None, 500, 'm'))
-            execute_many("""INSERT INTO production (po_number, model_name, confeccionador, po_qty, fabric_ref, metres_expected, expected_date, status, date_created)
-                            VALUES (?,?,?,?,?,?,?,?,?)""",
-                         [(r['po_number'], r['model_name'], r['confeccionador'], r['po_qty'], r['fabric_ref'],
+            execute_many("""INSERT INTO production (po_number, model_name, confeccionador, po_qty, fabric_ref, color, metres_expected, expected_date, status, date_created)
+                            VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                         [(r['po_number'], r['model_name'], r['confeccionador'], r['po_qty'], r['fabric_ref'], r['color'],
                            r['metres_expected'], r['expected_date'], r['status'], datetime.now().isoformat()) for r in ok_rows])
             tot_m = sum(r['metres_expected'] or 0 for r in ok_rows)
             log_movement('IMPORT', None, 'Excel/CSV', 'SNT', None, round(tot_m, 1), None,
@@ -2295,6 +2315,81 @@ def allocate_tokens(ref, n):
         except (ValueError, IndexError):
             pass
     return [f"R-{safe}-{maxn + i + 1:03d}" for i in range(n)]
+
+def try_parse_riopele(f):
+    """Deteta e converte o formato packing Riopele 'Report 1'
+    (Lote | Material | Acabamento | Cor | Remessa | … | Líquido (m) | Recebedor mercadoria)
+    para o formato canónico roll/ref_code/color/metres/lot + receiver. Devolve df ou None."""
+    if not f.name.lower().endswith(('.xlsx', '.xls')):
+        return None
+    try:
+        f.seek(0)
+        raw = pd.read_excel(f, header=None)
+    except Exception:
+        return None
+    hdr_idx = None
+    for i in range(min(6, len(raw))):
+        cells = {str(v).strip() for v in raw.iloc[i].tolist() if pd.notna(v)}
+        if 'Material' in cells and 'Lote' in cells and any('Líquido' in c for c in cells):
+            hdr_idx = i
+            break
+    if hdr_idx is None:
+        return None
+    cols = [str(v).strip() if pd.notna(v) else f'_{j}' for j, v in enumerate(raw.iloc[hdr_idx])]
+    df = raw.iloc[hdr_idx + 1:].copy()
+    df.columns = cols
+    liq_col = next((c for c in df.columns if 'Líquido' in c), None)
+    df = df[df['Material'].notna() & (df['Material'].astype(str).str.strip() != 'Material')]
+    if df.empty or not liq_col:
+        return None
+    def _code(v):
+        s = str(v).strip()
+        if s.endswith('.0'):
+            s = s[:-2]
+        return s
+    out = pd.DataFrame({
+        'roll': df['Lote'].apply(_code),
+        'ref_code': df['Material'].astype(str).str.strip().str[:6] + '/' + df['Acabamento'].astype(str).str.strip(),
+        'color': df['Cor'].apply(_code),
+        'metres': pd.to_numeric(df[liq_col], errors='coerce'),
+        'lot': df['Remessa'].apply(lambda v: 'Rem ' + _code(v)),
+        'receiver': df['Recebedor mercadoria'].astype(str).str.strip(),
+    }).reset_index(drop=True)
+    f.seek(0)
+    return out
+
+
+def resolve_color_code(ref, code):
+    """Resolve um código de cor Riopele ('0318', '002'…) para o nome oficial conhecido da ref.
+    Devolve (cor, nota ou None)."""
+    if not code or not code.isdigit():
+        return code, None
+    known = query_to_df("SELECT DISTINCT color FROM fabric_rolls WHERE ref_code = ? AND color IS NOT NULL AND color != ''",
+                        (ref,))['color'].tolist()
+    if not known:
+        return code, None
+    try:
+        cnum = int(code)
+    except ValueError:
+        return code, None
+    cands = []
+    for k in known:
+        m = re.search(r'(\d+)\s*$', k)
+        if m and int(m.group(1)) == cnum:
+            cands.append(k)
+    if not cands:
+        return code, None
+    if len(cands) == 1:
+        return cands[0], t('pk_color_map', c=code, k=cands[0])
+    # ambíguo: ganha a cor com mais metros em stock
+    best, best_m = cands[0], -1
+    for k in cands:
+        m = query_to_df("SELECT COALESCE(SUM(metres),0) m FROM fabric_rolls WHERE ref_code = ? AND color = ? AND status != 'INVOICED'",
+                        (ref, k)).iloc[0]['m']
+        if m > best_m:
+            best, best_m = k, m
+    return best, t('pk_color_map', c=code, k=best)
+
 
 def validate_packing_upload(df):
     """Valida packing list de rolos. Devolve (ok_rows[dict], issues[(linha, ref, sev, msg)])."""
@@ -2372,17 +2467,43 @@ def packing_section():
     up = st.file_uploader(t('up_file'), type=['xlsx', 'csv'], key='pk_file')
     if not up:
         return
-    try:
-        df = read_upload(up)
-    except Exception:
-        st.error(t('up_e_read'))
-        return
+    # v4.1: deteção automática do formato Riopele 'Report 1'
+    rio_df = try_parse_riopele(up)
+    dest_map, color_notes = {}, []
+    if rio_df is not None:
+        st.info(t('pk_rio', n=len(rio_df)))
+        # resolve códigos de cor para o nome oficial da ref
+        for i, r in rio_df.iterrows():
+            c_new, note = resolve_color_code(r['ref_code'], str(r['color']))
+            rio_df.at[i, 'color'] = c_new
+            if note and note not in color_notes:
+                color_notes.append(note)
+        for cn in color_notes:
+            st.caption('🎨 ' + cn)
+        # destino pelo recebedor (confeccionador conhecido) — fallback armazém selecionado
+        for recv in rio_df['receiver'].unique():
+            ru = recv.upper()
+            conf = next((c for c in CONFECCIONADORES if c.upper() in ru or ru in c.upper()), None)
+            dest_map[recv] = conf or pk_wh
+            if not conf:
+                st.warning(t('pk_recv_unknown', r=recv, wh=pk_wh))
+        df = rio_df
+    else:
+        try:
+            df = read_upload(up)
+        except Exception:
+            st.error(t('up_e_read'))
+            return
     df = norm_cols(df, PACKING_ALIASES)
     missing = [c for c in ['ref_code', 'metres'] if c not in df.columns]
     if missing:
         st.error(t('up_e_cols', c=', '.join(missing)))
         return
     ok_rows, issues = validate_packing_upload(df)
+    # destino por linha (formato Riopele: pelo recebedor; formato simples: armazém selecionado)
+    recv_by_roll = dict(zip(df.get('roll', pd.Series(dtype=str)), df.get('receiver', pd.Series(dtype=str)))) if rio_df is not None else {}
+    for r in ok_rows:
+        r['dest'] = dest_map.get(recv_by_roll.get(r['roll'], ''), pk_wh)
     n_err = sum(1 for x in issues if x[2] == 'err')
     n_warn = sum(1 for x in issues if x[2] == 'warn')
     tot_m = sum(r['metres'] for r in ok_rows)
@@ -2400,18 +2521,20 @@ def packing_section():
         return
     st.markdown(f'<div class="section-subtitle">{t("pk_summary")}</div>', unsafe_allow_html=True)
     dfr = pd.DataFrame(ok_rows)
-    summ = dfr.groupby([dfr['ref_code'], dfr['color'].fillna('—')]).agg(
+    summ = dfr.groupby([dfr['ref_code'], dfr['color'].fillna('—'), dfr['dest']]).agg(
         rolos=('metres', 'count'), metros=('metres', 'sum')).reset_index()
-    summ.columns = ['ref_code', 'color', 'rolos', 'metros']
+    summ.columns = ['ref_code', 'color', 'dest', 'rolos', 'metros']
     summ['metros'] = summ['metros'].round(2)
     summ = add_total_row(summ)
-    summ.columns = [t('c_ref'), t('c_color'), t('pk_rolls'), t('c_metres')]
+    summ.columns = [t('c_ref'), t('c_color'), t('pk_dest'), t('pk_rolls'), t('c_metres')]
     render_table(summ)
     with st.expander(t('up_preview')):
-        render_table(dfr[['roll', 'ref_code', 'color', 'metres', 'lot', 'po_number']], height=300)
-    if st.button(t('b_import_pk', n=len(ok_rows), m=f"{tot_m:,.0f}", wh=pk_wh), key='pk_go'):
+        render_table(dfr[['roll', 'ref_code', 'color', 'metres', 'lot', 'po_number', 'dest']], height=300)
+    wh_lbl = pk_wh if rio_df is None else ' · '.join(sorted({r['dest'] for r in ok_rows}))
+    if st.button(t('b_import_pk', n=len(ok_rows), m=f"{tot_m:,.0f}", wh=wh_lbl), key='pk_go'):
         for ref in sorted({r['ref_code'] for r in ok_rows if r['new_ref']}):
-            execute_sql("INSERT OR IGNORE INTO fabric_refs VALUES (?,?,?,?,?)", (ref, None, None, 500, 'm'))
+            execute_sql("INSERT OR IGNORE INTO fabric_refs VALUES (?,?,?,?,?)",
+                        (ref, 'Riopele' if rio_df is not None else None, None, 500, 'm'))
         by_ref = {}
         for r in ok_rows:
             by_ref.setdefault(r['ref_code'], []).append(r)
@@ -2421,8 +2544,8 @@ def packing_section():
             for tok, r in zip(allocate_tokens(ref, len(items)), items):
                 notes = ' · '.join(x for x in [f"Rolo {r['roll']}" if r['roll'] else '',
                                                f"PO {r['po_number']}" if r['po_number'] else '',
-                                               'Packing list'] if x)
-                rows_insert.append((tok, ref, r['metres'], r['lot'], r['color'], pk_wh,
+                                               'Packing Riopele' if rio_df is not None else 'Packing list'] if x)
+                rows_insert.append((tok, ref, r['metres'], r['lot'], r['color'], r['dest'],
                                     'AVAILABLE', None, now, now, notes))
         execute_many("INSERT INTO fabric_rolls VALUES (?,?,?,?,?,?,?,?,?,?,?)", rows_insert)
         received = []
@@ -2430,12 +2553,12 @@ def packing_section():
             st_q = query_to_df("SELECT status FROM incoming_fabric WHERE po_number = ?", (po,))
             if not st_q.empty and st_q.iloc[0]['status'] in ('EXPECTED', 'IN_TRANSIT'):
                 execute_sql("UPDATE incoming_fabric SET status = 'RECEIVED' WHERE po_number = ?", (po,))
-                log_movement('ARRIVAL', None, 'Fornecedor', pk_wh, None, None, None,
+                log_movement('ARRIVAL', None, 'Fornecedor', wh_lbl, None, None, None,
                              f'PO tecido {po} recebida via packing list')
                 received.append(po)
-        log_movement('RECEIPT', None, 'Fornecedor', pk_wh, None, round(tot_m, 1), None,
-                     f'Packing list: {len(ok_rows)} rolos ({tot_m:,.1f}m) em {pk_wh}')
-        msg = t('ok_pk', n=len(ok_rows), wh=pk_wh, m=f"{tot_m:,.0f}")
+        log_movement('RECEIPT', None, 'Fornecedor', wh_lbl, None, round(tot_m, 1), None,
+                     f'Packing list: {len(ok_rows)} rolos ({tot_m:,.1f}m) em {wh_lbl}')
+        msg = t('ok_pk', n=len(ok_rows), wh=wh_lbl, m=f"{tot_m:,.0f}")
         if received:
             msg += ' ' + t('pk_mark', pos=', '.join(received))
         st.success(msg)
@@ -2597,6 +2720,26 @@ def render_dashboard():
         display_df = safe_display_df(display_df)
         display_df.columns = [t('c_supplier'), t('c_ref'), t('c_desc'), t('c_colors'), t('c_avail'), t('c_inproc'), t('c_net'), t('c_inc'), t('c_need'), t('c_plan'), t('c_status')]
         render_table(display_df, height=400)
+
+        # v4.1: metragem exata por cor (ref + cor)
+        with st.expander(t('d_color_br')):
+            st.markdown(f'<div class="section-subtitle">{t("d_color_br_sub")}</div>', unsafe_allow_html=True)
+            cb = query_to_df("""
+                SELECT ref_code, COALESCE(NULLIF(color, ''), '(sem cor)') AS cor,
+                       ROUND(SUM(CASE WHEN status = 'AVAILABLE' THEN metres ELSE 0 END), 2) AS disponivel,
+                       ROUND(SUM(CASE WHEN status = 'IN_PROCESS' THEN metres ELSE 0 END), 2) AS em_processo,
+                       ROUND(SUM(metres), 2) AS total
+                FROM fabric_rolls WHERE status != 'INVOICED'
+                GROUP BY ref_code, cor ORDER BY ref_code, total DESC
+            """)
+            if not cb.empty:
+                cb['cor'] = cb.apply(lambda r: color_dot(r['cor']) + ' ' + str(r['cor']), axis=1)
+                cb = add_total_row(cb)
+                cb = safe_display_df(cb)
+                cb.columns = [t('c_ref'), t('c_color'), t('c_avail'), t('c_inproc'), t('c_totalm')]
+                render_table(cb, height=450)
+            else:
+                st.info(t('no_data'))
 
         # Pipeline
         st.markdown(f'<div class="section-title">{t("d_pipe")}</div>', unsafe_allow_html=True)
@@ -2847,7 +2990,7 @@ def render_production():
     # ---------- TAB LIVE ----------
     with tab_live:
         active_pos = query_to_df("""
-            SELECT po_number, model_name, confeccionador, po_qty, fabric_ref, metres_expected, status, base_model
+            SELECT po_number, model_name, confeccionador, po_qty, fabric_ref, color, metres_expected, status, base_model
             FROM production WHERE status IN ('PENDING', 'CUTTING') ORDER BY po_number DESC
         """)
 
@@ -2901,9 +3044,11 @@ def render_production():
                     <div style="color:var(--text);font-size:16px;font-weight:600;">{int(po_row['po_qty'])} pcs</div>
                 </div>""", unsafe_allow_html=True)
             with c3:
+                po_color = po_row['color'] if pd.notna(po_row['color']) and po_row['color'] else ''
+                fref_lbl = f"{color_dot(po_color)} {po_row['fabric_ref'] or '—'}" + (f" · {po_color}" if po_color else '')
                 st.markdown(f"""<div class="info-card" style="text-align:center;">
                     <div class="dev-label">{t('card_fref')}</div>
-                    <div style="color:var(--text);font-size:16px;font-weight:600;">{po_row['fabric_ref'] or '—'}</div>
+                    <div style="color:var(--text);font-size:16px;font-weight:600;">{fref_lbl}</div>
                 </div>""", unsafe_allow_html=True)
             with c4:
                 mpc_txt = f"{expected_mpc:.2f} m/pc" if expected_mpc else t('no_map')
@@ -2974,7 +3119,7 @@ def render_production():
         st.markdown(f'<div class="section-subtitle">{t("p_edit_sub")}</div>', unsafe_allow_html=True)
         status_filter = st.selectbox(t('p_view'), [t('v_active'), 'PENDING', 'CUTTING', 'INVOICED'], key="prod_filter")
 
-        base_q = """SELECT p.po_number, fr.supplier as fornecedor, p.fabric_ref, p.model_name, p.confeccionador,
+        base_q = """SELECT p.po_number, fr.supplier as fornecedor, p.fabric_ref, p.color, p.model_name, p.confeccionador,
                            p.po_qty, p.metres_expected, p.expected_date, p.status, p.base_model
                     FROM production p LEFT JOIN fabric_refs fr ON p.fabric_ref = fr.ref_code"""
         if status_filter == t('v_active'):
@@ -2986,7 +3131,7 @@ def render_production():
         if status_filter == 'INVOICED':
             if not prod_df.empty:
                 clean = safe_display_df(add_total_row(prod_df.drop(columns=['base_model'])))
-                clean.columns = [t('c_po2'), t('c_fsup'), t('c_fref'), t('c_model'), t('c_conf'), t('c_qty'), t('c_metres'), t('c_delivery'), t('c_state')]
+                clean.columns = [t('c_po2'), t('c_fsup'), t('c_fref'), t('c_color'), t('c_model'), t('c_conf'), t('c_qty'), t('c_metres'), t('c_delivery'), t('c_state')]
                 render_table(clean, height=450)
             else:
                 st.info(t('p_no_inv'))
@@ -3070,10 +3215,11 @@ def render_production():
                     elif new_st != prev_st and prev_st is not None:
                         pending_logs.append(('STATUS', None, None, None, None, None, po_val, f'Estado → {new_st}'))
                     cur.execute("""INSERT OR REPLACE INTO production
-                                   (po_number, model_name, confeccionador, po_qty, fabric_ref, metres_expected,
+                                   (po_number, model_name, confeccionador, po_qty, fabric_ref, color, metres_expected,
                                     expected_date, status, date_created, base_model)
-                                   VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                                   VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
                                 (po_val, r['model_name'], r['confeccionador'], qty, r['fabric_ref'],
+                                 str(r['color']).strip() if pd.notna(r['color']) and str(r['color']).strip() else None,
                                  m_val, r['expected_date'] if pd.notna(r['expected_date']) else None,
                                  new_st, now_iso, prev_bm))
                     n += 1
@@ -3231,7 +3377,7 @@ def render_consumos():
 
 def _render_andamento():
         run_df = query_to_df("""
-            SELECT p.po_number, p.model_name, p.confeccionador, p.po_qty, p.fabric_ref, p.base_model, p.metres_expected,
+            SELECT p.po_number, p.model_name, p.confeccionador, p.po_qty, p.fabric_ref, p.base_model, p.metres_expected, p.color,
                    COALESCE(SUM(c.pcs_cut), 0) AS pcs_cut,
                    COALESCE(SUM(c.metres_actual), 0) AS m_used,
                    COALESCE(SUM(CASE WHEN c.authorized = 1 THEN MAX(0, c.metres_actual - COALESCE(c.metres_expected, 0)) ELSE 0 END), 0) AS auth_extra,
@@ -3276,10 +3422,12 @@ def _render_andamento():
                 else:
                     n_start += 1
                 prog = min(100.0, pcs_cut / po_qty * 100) if po_qty else 0.0
-                cor_row = query_to_df("SELECT color FROM fabric_rolls WHERE po_garment = ? AND color IS NOT NULL AND color != '' LIMIT 1", (r['po_number'],))
-                if cor_row.empty:
-                    cor_row = query_to_df("SELECT color FROM fabric_rolls WHERE ref_code = ? AND color IS NOT NULL AND color != '' GROUP BY color ORDER BY COUNT(*) DESC LIMIT 1", (r['fabric_ref'],))
-                cor = cor_row.iloc[0]['color'] if not cor_row.empty else ''
+                cor = r['color'] if pd.notna(r['color']) and r['color'] else ''
+                if not cor:
+                    cor_row = query_to_df("SELECT color FROM fabric_rolls WHERE po_garment = ? AND color IS NOT NULL AND color != '' LIMIT 1", (r['po_number'],))
+                    if cor_row.empty:
+                        cor_row = query_to_df("SELECT color FROM fabric_rolls WHERE ref_code = ? AND color IS NOT NULL AND color != '' GROUP BY color ORDER BY COUNT(*) DESC LIMIT 1", (r['fabric_ref'],))
+                    cor = cor_row.iloc[0]['color'] if not cor_row.empty else ''
                 if dev is not None and dev > DEV_OK and std:
                     extra = (mpp - std) * po_qty
                     proj_html = f'<div class="po-proj">{t("rn_proj_over", m=f"{extra:,.0f}")}</div>'
@@ -3516,10 +3664,16 @@ def render_movement():
                 st.error(t('err_m3', m=f"{avail:,.1f}"))
             else:
                 dest_status = 'IN_PROCESS' if m3_to in CONFECCIONADORES else 'AVAILABLE'
+                # v4.1: lote criado herda a cor da PO ligada (se existir)
+                lot_color = None
+                if m3_po:
+                    cpo = query_to_df("SELECT color FROM production WHERE po_number = ?", (m3_po.strip(),))
+                    if not cpo.empty and cpo.iloc[0]['color']:
+                        lot_color = cpo.iloc[0]['color']
                 # Cria lote no destino
                 new_tok = next_token('P' if dest_status == 'IN_PROCESS' else 'R', m3_ref)
                 execute_sql("INSERT INTO fabric_rolls VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                            (new_tok, m3_ref, m3_metres, None, None, m3_to, dest_status, m3_po or None,
+                            (new_tok, m3_ref, m3_metres, None, lot_color, m3_to, dest_status, m3_po or None,
                              datetime.now().isoformat(), datetime.now().isoformat(), f'Consolidado de {m3_wh}'))
                 # Retira FIFO dos rolos de origem
                 remaining = m3_metres
@@ -3806,7 +3960,7 @@ def main():
     st.sidebar.markdown(f"""
     <div style="position:fixed;bottom:20px;left:20px;right:20px;">
         <div style="border-top:1px solid var(--line);padding-top:12px;color:var(--faint);font-size:11px;text-align:center;">
-            v4.0 | {t('sb_data')}<br>{datetime.now().strftime('%Y-%m-%d')}<br>
+            v4.1 | {t('sb_data')}<br>{datetime.now().strftime('%Y-%m-%d')}<br>
             <span style="color:#3b82f6;font-weight:600;">SNT CMT</span>
         </div>
     </div>
