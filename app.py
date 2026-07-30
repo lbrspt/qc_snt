@@ -1,6 +1,18 @@
 """
-SNT CMT - Sistema de Stock & Produção v5.0
+SNT CMT - Sistema de Stock & Produção v5.1
 Dados reais CW29 2026
+v5.1:
+- Cores fixas por ref: a PO só aceita cores PRÓPRIAS da ref (as que constam em stock ou
+  a chegar) — gravação da Tabela de Produção bloqueia cor fora da ref e o painel
+  "🎨 Cor da PO" passa a listar apenas essas cores (ex.: "Black 017" só na TCB258/EC1)
+- Cor da PO em massa: no mesmo painel, atribuição a várias POs de uma ref de uma só vez
+  + sugestões automáticas (palavra-cor do nome do modelo ↔ cores da ref em stock)
+- Armazém partilhado: Fabrijeans e Costa Correia (empresas distintas, mesmo armazém)
+  aparecem consolidadas como "Fabrijeans / Costa Correia" nas vistas de armazém
+  (Stock por Armazém, matriz cor × armazém, filtro de stock) — a produção continua
+  atribuída a cada empresa
+- Esclarecido no Andamento: a cor que conta para stock/consumos é a cor da PO
+  (linha ref · cor do cartão); a cor no nome do modelo é a cor da peça (informativa)
 v5.0:
 - Cor da PO garment: dropdown com cores EXISTENTES da ref (não é texto livre) + painel
   "🎨 Cor da PO" com cores filtradas por ref + aviso de incoerência cor↔ref; modo live
@@ -524,7 +536,7 @@ T = {
  'm_tools': '🛠 Ferramentas',
  'sb_system': 'Sistema de Stock & Produção', 'sb_nav': 'Navegar', 'sb_data': 'Dados: CW29 2026',
  'sb_theme': '🎨 Tema', 'sb_lang': '🌐 Idioma',
- 'h_sub': 'Sistema de Stock & Produção v5.0 | CW29 2026',
+ 'h_sub': 'Sistema de Stock & Produção v5.1 | CW29 2026',
  'no_data': 'Sem dados para mostrar.',
  'k_avail': 'STOCK DISPONÍVEL', 'k_avail_d': 'armazém + stock conf.',
  'k_process': 'EM PROCESSO (CONF.)', 'k_process_d': 'POs garment ativas',
@@ -643,7 +655,7 @@ T = {
  'c_sub': 'consumo por modelo base + fit (a cor já não entra no consumo) — o sistema deteta o modelo a partir do nome da PO; se não encontrar, associas manualmente',
  'c_tab_modelos': '📊 Mapa por Modelo', 'c_tab_andamento': '🏃 Andamento & Registos',
  'c_map_sub': 'standard e real médio por modelo base + fit. desvio > 5% gera alerta. edita o mapa e gere as associações PO ↔ modelo base mais abaixo.',
- 'c_prog_sub': 'guia de andamento das produções em corte + registos reais e autorizações. os cortes lançam-se SEMPRE em 👕 Produção → ⚡ Modo Live; aqui vês, filtras e corriges. "live" e "real" são o mesmo dado: cada corte lançado é um registo real, e o mapa mostra a média deles',
+ 'c_prog_sub': 'guia de andamento das produções em corte + registos reais e autorizações. os cortes lançam-se SEMPRE em 👕 Produção → ⚡ Modo Live; aqui vês, filtras e corriges. "live" e "real" são o mesmo dado: cada corte lançado é um registo real, e o mapa mostra a média deles. a cor que conta para stock e consumos é a cor da PO (linha ref · cor); a cor no nome do modelo é a cor da peça — apenas informativa',
  'c_fit': 'Fit', 'c_basemodel': 'Modelo Base', 'c_mpc_col': 'm/pc',
  'c_alloc_title': '🔗 Modelo base das POs',
  'c_alloc_sub': 'cada PO consome segundo o modelo base + fit do mapa. a deteção é automática pelo nome da PO; aqui podes rever e corrigir — útil para modelos novos ou nomes fora do padrão. associações manuais ficam guardadas na PO.',
@@ -662,6 +674,19 @@ T = {
  'pc_panel_sub': 'escolhe a PO e associa uma cor já criada para essa ref — a cor fica ligada à encomenda e aparece em Consumos e no stock. cores novas criam-se na Receção (packing) ou em Stock → Atribuir cor.',
  'pc_pick_color': 'Cor da ref', 'b_pc_save': '✓ Guardar cor na PO', 'ok_pc': '✅ {po} → {c}',
  'pc_mismatch': '⚠️ cor fora da ref',
+ 'pc_bulk': '⚡ Atribuição em massa',
+ 'pc_bulk_sub': 'escolhe a ref e a cor, e aplica a várias POs de uma vez — por defeito ficam selecionadas as POs sem cor ou com cor fora da ref',
+ 'pc_bulk_pos': 'POs a atualizar', 'b_pc_bulk': '✓ Aplicar cor às {n} POs',
+ 'ok_pc_bulk': '✅ {n} POs → {c}',
+ 'pc_auto': '✨ Sugestões automáticas',
+ 'pc_auto_sub': 'cor do nome do modelo (ex.: "Black") casada com as cores da ref em stock — só entram sugestões sem ambiguidade',
+ 'pc_auto_none': 'sem sugestões de momento — nenhuma cor do nome do modelo casa 1:1 com as cores da ref',
+ 'b_pc_auto': '✨ Aplicar {n} sugestões', 'ok_pc_auto': '✅ {n} POs com cor sugerida',
+ 'pc_cur': 'atual', 'pc_sug': 'sugerida',
+ 'pc_invalid': '⛔ {n} PO(s) com cor que não pertence à ref — gravação bloqueada. corrige na tabela ou no painel 🎨 Cor da PO',
+ 'pc_valid_list': 'cores válidas',
+ 'pc_none': 'sem cor na PO',
+ 's_wh_note': '🏭 Fabrijeans e Costa Correia são empresas diferentes mas partilham o mesmo armazém — nestas vistas aparecem consolidadas como "Fabrijeans / Costa Correia". a produção (POs, consumos, pipeline) continua atribuída a cada empresa.',
  'c_mpc_src': 'Fonte',
  'p_mpc_legend': 'm/pc = metros por peça (abreviado, 2 casas). valor considerado: 📈 média real dos registos (se existir) → 📐 standard do mapa → 📋 declarado na PO. é este valor que projeta metros e valida desvios.',
  'c_edit_reg': '✏️ Corrigir registos reais',
@@ -754,7 +779,7 @@ T = {
  'm_tools': '🛠 Tools',
  'sb_system': 'Fabric Stock & Production System', 'sb_nav': 'Navigate', 'sb_data': 'Data: CW29 2026',
  'sb_theme': '🎨 Theme', 'sb_lang': '🌐 Language',
- 'h_sub': 'Fabric Stock & Production System v5.0 | CW29 2026',
+ 'h_sub': 'Fabric Stock & Production System v5.1 | CW29 2026',
  'no_data': 'No data to display.',
  'k_avail': 'AVAILABLE STOCK', 'k_avail_d': 'warehouse + conf. stock',
  'k_process': 'IN PROCESS (CONF.)', 'k_process_d': 'active garment POs',
@@ -873,7 +898,7 @@ T = {
  'c_sub': 'consumption by base model + fit (colour no longer part of consumption) — the system detects the model from the PO name; if not found, you assign it manually',
  'c_tab_modelos': '📊 Map by Model', 'c_tab_andamento': '🏃 Progress & Records',
  'c_map_sub': 'standard and actual average by base model + fit. deviation > 5% triggers an alert. Edit the map and manage PO ↔ base model links below.',
- 'c_prog_sub': 'cutting progress guide + actual records and authorizations. Cuts are ALWAYS registered in 👕 Production → ⚡ Live Mode; here you view, filter and fix. "Live" and "real" are the same data: each registered cut is an actual record, and the map shows their average',
+ 'c_prog_sub': 'cutting progress guide + actual records and authorizations. Cuts are ALWAYS registered in 👕 Production → ⚡ Live Mode; here you view, filter and fix. "Live" and "real" are the same data: each registered cut is an actual record, and the map shows their average. The colour that counts for stock and consumption is the PO colour (ref · colour line); the colour in the model name is the garment colour — informative only',
  'c_fit': 'Fit', 'c_basemodel': 'Base Model', 'c_mpc_col': 'm/pc',
  'c_alloc_title': '🔗 PO base models',
  'c_alloc_sub': 'each PO consumes according to a map base model + fit. Detection is automatic from the PO name; review and fix here — useful for new models or unusual names. Manual links are saved on the PO.',
@@ -892,6 +917,19 @@ T = {
  'pc_panel_sub': 'pick the PO and link an existing colour of that ref — the colour stays on the order and shows in Consumption and stock. New colours are created at Receiving (packing) or in Stock → Assign colour.',
  'pc_pick_color': 'Ref colour', 'b_pc_save': '✓ Save colour on PO', 'ok_pc': '✅ {po} → {c}',
  'pc_mismatch': '⚠️ colour outside ref',
+ 'pc_bulk': '⚡ Bulk assignment',
+ 'pc_bulk_sub': 'pick the ref and colour, apply to several POs at once — POs with no colour or an out-of-ref colour are pre-selected',
+ 'pc_bulk_pos': 'POs to update', 'b_pc_bulk': '✓ Apply colour to {n} POs',
+ 'ok_pc_bulk': '✅ {n} POs → {c}',
+ 'pc_auto': '✨ Automatic suggestions',
+ 'pc_auto_sub': 'colour word from the model name (e.g. "Black") matched against the ref colours in stock — only unambiguous suggestions are listed',
+ 'pc_auto_none': 'no suggestions right now — no model-name colour matches a ref colour 1:1',
+ 'b_pc_auto': '✨ Apply {n} suggestions', 'ok_pc_auto': '✅ {n} POs with suggested colour',
+ 'pc_cur': 'current', 'pc_sug': 'suggested',
+ 'pc_invalid': '⛔ {n} PO(s) with a colour that does not belong to the ref — save blocked. Fix in the table or in the 🎨 PO colour panel',
+ 'pc_valid_list': 'valid colours',
+ 'pc_none': 'no PO colour',
+ 's_wh_note': '🏭 Fabrijeans and Costa Correia are different companies sharing the same warehouse — shown consolidated as "Fabrijeans / Costa Correia" in these views. Production (POs, consumption, pipeline) stays attributed to each company.',
  'c_mpc_src': 'Source',
  'p_mpc_legend': 'm/pc = metres per piece (abbreviated, 2 decimals). Value used: 📈 real average of records (if any) → 📐 map standard → 📋 declared on the PO. This value projects metres and validates deviations.',
  'c_edit_reg': '✏️ Fix actual records',
@@ -1040,6 +1078,21 @@ CONFECCIONADORES = ['Samidel', 'Costa Correia', 'Tyrrell', 'Acorfato', 'Fabrijea
 ALL_LOCATIONS = WAREHOUSES + CONFECCIONADORES + ['Fornecedor', 'Cliente']
 PROD_STATUSES = ['PENDING', 'CUTTING', 'INVOICED']
 ROLL_STATUSES = ['AVAILABLE', 'RESERVED', 'IN_PROCESS', 'INVOICED']
+
+# v5.1: armazéns partilhados — Fabrijeans e Costa Correia são empresas distintas
+# mas partilham o mesmo armazém físico; nas vistas de armazém aparecem consolidadas
+WH_SHARED = 'Fabrijeans / Costa Correia'
+WAREHOUSE_GROUPS = {'Fabrijeans': WH_SHARED, 'Costa Correia': WH_SHARED,
+                    'Fabrijeans / Costa C': WH_SHARED}
+
+def wh_group(entity):
+    """Armazém físico de uma entidade (consolida empresas que partilham armazém)."""
+    return WAREHOUSE_GROUPS.get(entity, entity)
+
+def wh_members(group):
+    """Entidades reais guardadas na BD que pertencem a um armazém consolidado."""
+    mem = [k for k, v in WAREHOUSE_GROUPS.items() if v == group]
+    return mem if mem else [group]
 
 # ===================== SISTEMA DE COR =====================
 # A cor anda sempre ligada à referência: representação visual consistente em todo o site
@@ -2129,15 +2182,42 @@ def colors_of_ref(ref):
         cols.update(query_to_df(q, (ref,))['color'].tolist())
     return sorted(cols)
 
+def stock_colors_of_ref(ref):
+    """v5.1: cores PRÓPRIAS da ref — as que constam em stock (rolos/lotes) ou encomendas
+    a chegar. São as únicas cores válidas para POs dessa ref (ex.: 'Black 017' só na
+    TCB258/EC1)."""
+    if not ref:
+        return []
+    cols = set()
+    for q in ("SELECT DISTINCT color FROM fabric_rolls WHERE ref_code = ? AND color IS NOT NULL AND color != ''",
+              "SELECT DISTINCT color FROM incoming_fabric WHERE ref_code = ? AND color IS NOT NULL AND color != ''"):
+        cols.update(query_to_df(q, (ref,))['color'].tolist())
+    return sorted(cols)
+
 def po_color_mismatch(ref, color):
-    """True se a cor está definida mas não pertence às cores conhecidas da ref."""
+    """True se a cor está definida mas não pertence às cores da ref. v5.1: valida contra
+    as cores em stock/a chegar; se a ref ainda não tem nenhuma, aceita as cores conhecidas."""
     if not color or not ref:
         return False
-    known = colors_of_ref(ref)
+    known = stock_colors_of_ref(ref) or colors_of_ref(ref)
     if not known:
         return False
     cl = color.lower()
     return not any(cl in k.lower() or k.lower() in cl for k in known)
+
+def suggest_po_color(model_name, ref):
+    """v5.1: sugere a cor da PO — palavra-cor do nome do modelo (ex.: 'Black' em
+    'Ease Pants Tapered Black') casada com as cores próprias da ref em stock.
+    Só devolve quando há exatamente 1 candidato (zero ambiguidade)."""
+    known = stock_colors_of_ref(ref)
+    if not known:
+        return None
+    s = str(model_name or '').lower()
+    phrase = next((c for c in _COLOR_LIST if re.search(r'\b' + re.escape(c) + r'\b', s)), None)
+    if not phrase:
+        return None
+    cands = [k for k in known if phrase in k.lower()]
+    return cands[0] if len(cands) == 1 else None
 
 def dev_signal(pct, authorized=0):
     """Chip de sinal de desvio: (texto, classe css). Autorizado sobrepõe o sinal."""
@@ -2934,6 +3014,10 @@ def render_stock():
             FROM fabric_rolls WHERE status != 'INVOICED'
             GROUP BY warehouse, ref_code, status ORDER BY warehouse, ref_code
         """)
+        # v5.1: consolida empresas que partilham o mesmo armazém físico
+        # (Fabrijeans + Costa Correia → "Fabrijeans / Costa Correia")
+        if not wh_df.empty:
+            wh_df['warehouse'] = wh_df['warehouse'].apply(wh_group)
 
         if not wh_df.empty:
             piv = wh_df.pivot_table(index='warehouse', columns='status', values='total_metres', aggfunc='sum').fillna(0).reset_index()
@@ -2948,6 +3032,7 @@ def render_stock():
             summary = safe_display_df(add_total_row(summary))
             summary.columns = ['', t('c_loc'), t('c_availm'), t('c_inprocm'), t('c_totalm'), t('c_rollslot')]
             render_table(summary)
+            st.caption(t('s_wh_note'))
 
         # ===== v5: Matriz cor × armazém (como o Fabric audit) =====
         with st.expander(t('s_matrix')):
@@ -2962,7 +3047,12 @@ def render_stock():
             if mx.empty:
                 st.info(t('no_data'))
             else:
-                entities = [w for w in WAREHOUSES + CONFECCIONADORES if w in set(mx['warehouse'])]
+                # v5.1: colunas por armazém físico (Fabrijeans + Costa Correia consolidadas)
+                mx['warehouse'] = mx['warehouse'].apply(wh_group)
+                mx = mx.groupby(['ref_code', 'cor', 'warehouse'], as_index=False)[['disp', 'proc']].sum()
+                ent_order = WAREHOUSES + [WH_SHARED] + [c for c in CONFECCIONADORES if c not in WAREHOUSE_GROUPS]
+                entities = [w for w in ent_order if w in set(mx['warehouse'])]
+                entities += [w for w in sorted(set(mx['warehouse'])) if w not in entities]
                 cells = {}
                 for _, r in mx.iterrows():
                     cells[(r['ref_code'], r['cor'], r['warehouse'])] = (r['disp'], r['proc'])
@@ -3066,7 +3156,9 @@ def render_stock():
 
         col1, col2, col3 = st.columns(3)
         with col1:
-            wh_list = query_to_df("SELECT DISTINCT warehouse FROM fabric_rolls ORDER BY warehouse")['warehouse'].tolist()
+            # v5.1: filtro por armazém físico (consolidado)
+            raw_whs = query_to_df("SELECT DISTINCT warehouse FROM fabric_rolls")['warehouse'].tolist()
+            wh_list = sorted({wh_group(w) for w in raw_whs})
             selected_wh = st.selectbox(t('f_wh'), [t('opt_all')] + wh_list, key="stock_wh")
         with col2:
             ref_list = query_to_df("SELECT DISTINCT ref_code FROM fabric_rolls ORDER BY ref_code")['ref_code'].tolist()
@@ -3078,7 +3170,8 @@ def render_stock():
                    FROM fabric_rolls r LEFT JOIN fabric_refs fr ON r.ref_code = fr.ref_code WHERE 1=1"""
         params = []
         if selected_wh != t('opt_all'):
-            query += " AND r.warehouse = ?"; params.append(selected_wh)
+            wh_mem = wh_members(selected_wh)
+            query += f" AND r.warehouse IN ({','.join('?' * len(wh_mem))})"; params.extend(wh_mem)
         if selected_ref != t('opt_all_f'):
             query += " AND r.ref_code = ?"; params.append(selected_ref)
         if selected_status != t('opt_all'):
@@ -3491,7 +3584,19 @@ def render_production():
             st.markdown(f'<div class="section-subtitle">{sub_txt}</div>', unsafe_allow_html=True)
             st.caption(t('p_mpc_legend'))
 
-            if st.button(t('b_save_prod'), key="prod_save"):
+            # v5.1: cores fixas por ref — a PO só aceita cores próprias da ref (stock/a chegar).
+            # Validado em direto na tabela; enquanto houver cor fora da ref a gravação fica bloqueada.
+            bad_colors = []
+            for _, vr in edited.iterrows():
+                vc = str(vr['color']).strip() if pd.notna(vr['color']) else ''
+                if vc and pd.notna(vr['fabric_ref']) and vr['fabric_ref'] and po_color_mismatch(vr['fabric_ref'], vc):
+                    bad_colors.append((str(vr['po_number']), vr['fabric_ref'], vc, stock_colors_of_ref(vr['fabric_ref'])))
+            if bad_colors:
+                st.error(t('pc_invalid', n=len(bad_colors)) + ': ' + ' · '.join(
+                    f"{bp} [{bf}] → “{bc}” ({t('pc_valid_list')}: {', '.join(bl[:6]) if bl else '—'})"
+                    for bp, bf, bc, bl in bad_colors[:8]))
+
+            if st.button(t('b_save_prod'), key="prod_save") and not bad_colors:
                 edited = edited.dropna(subset=['po_number'])
                 edited = edited[edited['po_number'].astype(str).str.strip() != '']
                 conn = sqlite3.connect(DB_PATH)
@@ -3553,6 +3658,8 @@ def render_production():
                 st.warning(t('pc_mismatch') + ': ' + ' · '.join(f"{p} ({c} ↔ {f})" for p, c, f in mism[:5]))
 
             # v5: associar cor existente da ref a uma PO (cores filtradas por ref)
+            # v5.1: painel passa a usar APENAS as cores próprias da ref (stock/a chegar)
+            # e ganha atribuição em massa + sugestões automáticas pelo nome do modelo
             with st.expander(t('pc_panel')):
                 st.markdown(f'<div class="section-subtitle">{t("pc_panel_sub")}</div>', unsafe_allow_html=True)
                 pc_pos = query_to_df("""SELECT po_number, model_name, fabric_ref, color FROM production
@@ -3565,7 +3672,7 @@ def render_production():
                         pc_po = st.selectbox(t('c_alloc_po'), pc_pos['po_number'].tolist(), key='pc_po',
                                              format_func=lambda p: f"{p} — {pc_pos[pc_pos['po_number']==p].iloc[0]['model_name'][:35]} · {pc_pos[pc_pos['po_number']==p].iloc[0]['color'] or 's/cor'}")
                     pc_ref = pc_pos[pc_pos['po_number'] == pc_po].iloc[0]['fabric_ref']
-                    pc_colors = colors_of_ref(pc_ref)
+                    pc_colors = stock_colors_of_ref(pc_ref) or colors_of_ref(pc_ref)
                     with c2:
                         pc_color = st.selectbox(f"{t('pc_pick_color')} · {pc_ref}", pc_colors, key='pc_color',
                                                 format_func=lambda c: f"{color_dot(c)} {c}") if pc_colors else None
@@ -3575,6 +3682,60 @@ def render_production():
                         execute_sql("UPDATE production SET color = ? WHERE po_number = ?", (pc_color, pc_po))
                         log_movement('EDIT', None, None, None, pc_ref, None, pc_po, f'Cor da PO → {pc_color}', pc_color)
                         st.success(t('ok_pc', po=pc_po, c=pc_color))
+                        st.rerun()
+
+                    # ===== v5.1: sugestões automáticas (cor do nome do modelo ↔ cores da ref) =====
+                    props = []
+                    for _, pr in pc_pos.iterrows():
+                        sug = suggest_po_color(pr['model_name'], pr['fabric_ref'])
+                        cur_c = pr['color'] if pd.notna(pr['color']) and pr['color'] else ''
+                        if sug and sug != cur_c:
+                            props.append({'po': pr['po_number'], 'modelo': pr['model_name'],
+                                          'ref': pr['fabric_ref'], 'atual': cur_c or '—', 'sugerida': sug})
+                    st.markdown(f'<div class="section-subtitle" style="margin-top:14px;">{t("pc_auto")} — {t("pc_auto_sub")}</div>', unsafe_allow_html=True)
+                    if not props:
+                        st.caption(t('pc_auto_none'))
+                    else:
+                        prop_df = pd.DataFrame(props)
+                        prop_df.columns = [t('c_po'), t('c_model'), t('c_fref'), t('pc_cur'), t('pc_sug')]
+                        render_table(prop_df, height=min(400, 60 + 35 * len(prop_df)))
+                        auto_sel = st.multiselect(t('pc_bulk_pos'), [p['po'] for p in props],
+                                                  default=[p['po'] for p in props], key='pc_auto_sel',
+                                                  format_func=lambda p: f"{p} → {next(x['sugerida'] for x in props if x['po'] == p)}")
+                        if auto_sel and st.button(t('b_pc_auto', n=len(auto_sel)), key='pc_auto_apply'):
+                            for p in props:
+                                if p['po'] in auto_sel:
+                                    execute_sql("UPDATE production SET color = ? WHERE po_number = ?", (p['sugerida'], p['po']))
+                                    log_movement('EDIT', None, None, None, p['ref'], None, p['po'],
+                                                 f'Cor da PO (auto) → {p["sugerida"]}', p['sugerida'])
+                            st.success(t('ok_pc_auto', n=len(auto_sel)))
+                            st.rerun()
+
+                    # ===== v5.1: atribuição em massa (ref → cor → várias POs) =====
+                    st.markdown(f'<div class="section-subtitle" style="margin-top:14px;">{t("pc_bulk")} — {t("pc_bulk_sub")}</div>', unsafe_allow_html=True)
+                    b_refs = sorted({r for r in pc_pos['fabric_ref'] if pd.notna(r) and r})
+                    bc1, bc2 = st.columns(2)
+                    with bc1:
+                        b_ref = st.selectbox(t('c_fref'), b_refs, key='pc_bulk_ref')
+                    b_colors = stock_colors_of_ref(b_ref) or colors_of_ref(b_ref)
+                    with bc2:
+                        b_color = st.selectbox(f"{t('pc_pick_color')} · {b_ref}", b_colors, key='pc_bulk_color',
+                                               format_func=lambda c: f"{color_dot(c)} {c}") if b_colors else None
+                    pool = pc_pos[pc_pos['fabric_ref'] == b_ref]
+                    # pré-seleção: POs sem cor ou com cor fora da ref (as que precisam de correção)
+                    pre_sel = [r['po_number'] for _, r in pool.iterrows()
+                               if not (pd.notna(r['color']) and r['color']) or po_color_mismatch(b_ref, r['color'])]
+                    b_sel = st.multiselect(t('pc_bulk_pos'), pool['po_number'].tolist(), default=pre_sel,
+                                           key='pc_bulk_sel',
+                                           format_func=lambda p: f"{p} — {pool[pool['po_number']==p].iloc[0]['model_name'][:30]} · {pool[pool['po_number']==p].iloc[0]['color'] or 's/cor'}")
+                    if not b_colors:
+                        st.info(t('ok_nocolor'))
+                    elif b_sel and st.button(t('b_pc_bulk', n=len(b_sel)), key='pc_bulk_save'):
+                        for bpo in b_sel:
+                            execute_sql("UPDATE production SET color = ? WHERE po_number = ?", (b_color, bpo))
+                        log_movement('EDIT', None, None, None, b_ref, None, None,
+                                     f'Cor em massa → {b_color} ({len(b_sel)} POs: {", ".join(b_sel[:8])}{"…" if len(b_sel) > 8 else ""})', b_color)
+                        st.success(t('ok_pc_bulk', n=len(b_sel), c=b_color))
                         st.rerun()
 
     # ---------- TAB CARREGAR POs (EXCEL/CSV) ----------
@@ -3769,12 +3930,8 @@ def _render_andamento():
                 prog = min(100.0, pcs_cut / po_qty * 100) if po_qty else 0.0
                 cor = r['color'] if pd.notna(r['color']) and r['color'] else ''
                 cor_bad = bool(cor) and po_color_mismatch(r['fabric_ref'], cor)
-                if not cor:
-                    cor_row = query_to_df("SELECT color FROM fabric_rolls WHERE po_garment = ? AND color IS NOT NULL AND color != '' LIMIT 1", (r['po_number'],))
-                    if cor_row.empty:
-                        cor_row = query_to_df("SELECT color FROM fabric_rolls WHERE ref_code = ? AND color IS NOT NULL AND color != '' GROUP BY color ORDER BY COUNT(*) DESC LIMIT 1", (r['fabric_ref'],))
-                    cor = cor_row.iloc[0]['color'] if not cor_row.empty else ''
-                cor_lbl = f"⚠️ {cor}" if cor_bad else cor
+                # v5.1: a cor que conta é SÓ a da PO — sem adivinhar pela mais comum da ref
+                cor_lbl = (f"⚠️ {cor}" if cor_bad else cor) if cor else f"⚠️ {t('pc_none')}"
                 if dev is not None and dev > DEV_OK and std:
                     extra = (mpp - std) * po_qty
                     proj_html = f'<div class="po-proj">{t("rn_proj_over", m=f"{extra:,.0f}")}</div>'
@@ -4394,7 +4551,7 @@ def main():
     st.sidebar.markdown(f"""
     <div style="position:fixed;bottom:20px;left:20px;right:20px;">
         <div style="border-top:1px solid var(--line);padding-top:12px;color:var(--faint);font-size:11px;text-align:center;">
-            v5.0 | {t('sb_data')}<br>{datetime.now().strftime('%Y-%m-%d')}<br>
+            v5.1 | {t('sb_data')}<br>{datetime.now().strftime('%Y-%m-%d')}<br>
             <span style="color:#3b82f6;font-weight:600;">SNT CMT</span>
         </div>
     </div>

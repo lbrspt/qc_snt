@@ -1,3 +1,13 @@
+## v5.1 — Cores fixas por ref · Cor da PO em massa + auto-sugestão · Armazém Fabrijeans/Costa Correia consolidado
+
+| Pedido | Implementação |
+|---|---|
+| **1) Que cor conta? + correção sem ir PO a PO** | A cor que conta para stock e consumos é **a cor da PO** (linha `ref · cor` do cartão/registo); a cor no nome do modelo é a cor da peça — apenas informativa (agora dito no próprio painel). No painel **🎨 Cor da PO** (Produção → Tabela) há agora duas vias rápidas: **✨ Sugestões automáticas** — a palavra-cor do nome do modelo (ex.: "Black") casada com as cores da ref em stock, só sem ambiguidade (44 POs resolvidas de uma vez nos dados atuais) — e **⚡ Atribuição em massa**: escolhes ref → cor → POs (pré-selecionadas as que estão sem cor ou com cor fora da ref) |
+| **2) Cores fixas e únicas por ref** | A PO só aceita as **cores próprias da ref** — as que constam em stock (rolos/lotes) ou a chegar. O painel 🎨 lista apenas essas; a ✏️ Tabela de Produção **bloqueia a gravação** enquanto houver cor fora da ref e mostra as cores válidas (ex.: "Black 017" só existe na Riopele TCB258/EC1 — não entra num Carreman). O upload CSV de POs já avisava (⚠️) nestes casos. No 🏃 Andamento, PO sem cor mostra **"⚠️ sem cor na PO"** em vez de adivinhar a cor mais comum da ref (era a fonte das cores trocadas nos cartões) |
+| **3) Armazém Costa Correia → "Fabrijeans / Costa Correia"** | São empresas distintas mas partilham o armazém físico. Nas **vistas de armazém** (📦 Stock por Armazém, 🎨 Matriz cor × armazém, filtro de armazém do detalhe de rolos) passam a aparecer consolidadas como **"Fabrijeans / Costa Correia"** (inclui os lotes antigos "Fabrijeans / Costa C"). A produção continua atribuída a cada empresa — pipeline, POs, consumos e movimentos mantêm Fabrijeans e Costa Correia separados |
+
+---
+
 ## v5.0 — Cor da PO ligada ao stock · Registos corrigíveis · Histórico completo · Stock por período · Matriz cor×armazém
 
 | Pedido | Implementação |
