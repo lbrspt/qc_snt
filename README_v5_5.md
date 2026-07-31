@@ -1,3 +1,21 @@
+## v5.5 — Confirmações persistentes (pop-ups já não desaparecem)
+
+| Pedido | Implementação |
+|---|---|
+| **Pop-ups de confirmação desapareciam demasiado rápido** | Causa: após cada gravação a app recarregava (`st.rerun()`) e a mensagem de sucesso era limpa no mesmo instante — mal se conseguia ler. Novo sistema de mensagens **flash**: a confirmação é guardada antes do recarregamento e aparece **no topo da página seguinte**, ficando visível até à próxima interação. Aplicado às 21 confirmações da app: tabela de produção, datas de faturação, registo de corte, movimentações (3 modos + divisão de lote), receções, faturação, associações de molde, cores da PO, mapa de consumos e uploads |
+
+---
+
+## v5.4 — Semana/data de faturação editável · Associação de molde só em Consumos · PO4445 (mapa por ref)
+
+| Pedido | Implementação |
+|---|---|
+| **1) Edição da semana de faturação (controlo)** | Nova coluna **`date_invoiced`** na produção. Ao marcar uma PO como **INVOICED** na tabela principal, a data fica automaticamente como **hoje**; as POs já faturadas recebem a data do 1º movimento INVOICE (migração automática, idempotente). A vista **Produção » INVOICED** é agora editável: alteras a **Data de Faturação** (AAAA-MM-DD) e a coluna **Semana (CW)** calcula-se sozinha. A vista por período do Stock passa a usar esta data — editar a data muda a semana onde a faturação conta |
+| **2) Associação de molde — sítio único** | Confirmado: era redundante. A associação PO → modelo base passa a existir **só em 📊 Consumos » 🔗 Modelo base das POs** (fonte única de verdade). No ⚡ Modo Live, se a PO não tem mapa, aparece um aviso com o caminho para associar. A ✏️ Tabela de Produção continua a editar tudo o resto (peças, metros, datas, estado, cor…) |
+| **3) POAPS2000004445 sem m/pc** | Causa encontrada: tinhas associado a PO (tecido **TCD524/EC1**) à entrada "Essential Suit Pants · Regular" da ref **TCB258/EC1** — o sistema procura sempre dentro da **ref da própria PO**, por isso a associação cruzada nunca resolvia e o m/pc ficava em branco (no Live também). Agora o dropdown de associação **só mostra entradas da ref da PO**; se não houver nenhuma, a app diz para a criar. **O que fazer:** em ✏️ Editar Mapa cria a entrada `Essential Suit Pants · Regular · TCD524/EC1` (ou edita a existente para essa ref) — a associação manual que já tinhas feito passa a resolver de imediato, sem voltares a escolher nada |
+
+---
+
 ## v5.3 — Contraste clean reforçado (Edge) · Exports Excel formatados · Mapa recalcula ao associar modelo
 
 | Pedido | Implementação |

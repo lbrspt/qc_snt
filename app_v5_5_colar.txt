@@ -1,6 +1,20 @@
 """
-SNT CMT - Sistema de Stock & Produção v5.3
+SNT CMT - Sistema de Stock & Produção v5.5
 Dados reais CW29 2026
+v5.5:
+- Confirmações persistentes: as mensagens de sucesso (guardar tabela, registar corte,
+  movimentações, receções, associações, uploads…) desapareciam instantaneamente porque
+  o st.rerun() as limpava. Novo sistema "flash": a mensagem é guardada antes do rerun e
+  mostrada no topo da página seguinte — fica visível até à próxima interação
+v5.4:
+- Produção » vista INVOICED: data de faturação editável + semana CW calculada. Ao marcar
+  INVOICED na tabela principal a data fica como hoje; POs antigas recebem a data do 1º
+  movimento INVOICE (migração). Vista por período (Stock) usa a data editada
+- Modo Live: associação de modelo base removida (era redundante) — a associação vive só
+  em 📊 Consumos » 🔗 Modelo base das POs; a tabela de produção continua a editar tudo
+- Consumos 🔗: dropdown de entradas filtrado pela REF de tecido da PO — uma associação
+  manual a uma entrada de OUTRA ref nunca resolvia (m/pc em branco); agora só aparecem
+  entradas válidas e, se não houver nenhuma, é indicado criá-la em ✏️ Editar Mapa
 v5.3:
 - Contraste reforçado no tema clean (Edge/Chrome): contorno visível em todos os campos de
   formulário (INPUT_BORDER por tema), bordas e muted mais fortes — fim dos campos
@@ -667,7 +681,7 @@ T = {
  'm_tools': '🛠 Ferramentas',
  'sb_system': 'Sistema de Stock & Produção', 'sb_nav': 'Navegar', 'sb_data': 'Dados: CW29 2026',
  'sb_theme': '🎨 Tema', 'sb_lang': '🌐 Idioma',
- 'h_sub': 'Sistema de Stock & Produção v5.3 | CW29 2026',
+ 'h_sub': 'Sistema de Stock & Produção v5.5 | CW29 2026',
  'no_data': 'Sem dados para mostrar.',
  'k_avail': 'STOCK DISPONÍVEL', 'k_avail_d': 'armazém + stock conf.',
  'k_process': 'EM PROCESSO (CONF.)', 'k_process_d': 'POs garment ativas',
@@ -769,6 +783,12 @@ T = {
  'dev_ok': 'dentro da tolerância', 'dev_warn': 'atenção — desvio 2–5%', 'dev_bad': '⚠️ DESVIO CRÍTICO > 5%',
  'dev_label': 'Desvio vs mapa',
  'p_no_map': '⚠️ Este modelo não tem consumo no mapa. O registo fica sem validação de desvio — considera adicioná-lo em 📊 Consumos.',
+ 'p_alloc_goto': 'associa o modelo base em 📊 Consumos » 🔗 Modelo base das POs',
+ 'inv_sub': 'vista de controlo de faturação — edita a DATA de faturação (AAAA-MM-DD); a SEMANA calcula-se automaticamente. Ao marcar INVOICED na tabela principal, a data fica como hoje.',
+ 'inv_date': 'Data Faturação', 'inv_week': 'Semana',
+ 'b_save_inv': '💾 Guardar datas', 'ok_inv_date': '✅ {n} datas de faturação atualizadas',
+ 'inv_bad_date': '⛔ data inválida (usa AAAA-MM-DD)',
+ 'c_alloc_noref': 'sem entradas no mapa para a ref {r} — cria-a em ✏️ Editar Mapa acima e depois associa',
  'err_vals': 'Peças e metros têm de ser > 0',
  'ok_cut': '✅ Corte registado: {pcs} pcs × {mpc} m/pc = {m}m',
  'card_conf': 'Confeccionador', 'card_pcs': 'Peças PO', 'card_fref': 'Ref Tecido', 'card_cons': 'Consumo Esperado',
@@ -910,7 +930,7 @@ T = {
  'm_tools': '🛠 Tools',
  'sb_system': 'Fabric Stock & Production System', 'sb_nav': 'Navigate', 'sb_data': 'Data: CW29 2026',
  'sb_theme': '🎨 Theme', 'sb_lang': '🌐 Language',
- 'h_sub': 'Fabric Stock & Production System v5.3 | CW29 2026',
+ 'h_sub': 'Fabric Stock & Production System v5.5 | CW29 2026',
  'no_data': 'No data to display.',
  'k_avail': 'AVAILABLE STOCK', 'k_avail_d': 'warehouse + conf. stock',
  'k_process': 'IN PROCESS (CONF.)', 'k_process_d': 'active garment POs',
@@ -1012,6 +1032,12 @@ T = {
  'dev_ok': 'within tolerance', 'dev_warn': 'warning — 2–5% deviation', 'dev_bad': '⚠️ CRITICAL DEVIATION > 5%',
  'dev_label': 'Deviation vs map',
  'p_no_map': '⚠️ This model has no consumption in the map. The record will have no deviation validation — consider adding it in 📊 Consumption.',
+ 'p_alloc_goto': 'assign the base model in 📊 Consumption » 🔗 PO base model',
+ 'inv_sub': 'invoicing control view — edit the INVOICING DATE (YYYY-MM-DD); the WEEK is computed automatically. Marking INVOICED in the main table sets the date to today.',
+ 'inv_date': 'Invoicing Date', 'inv_week': 'Week',
+ 'b_save_inv': '💾 Save dates', 'ok_inv_date': '✅ {n} invoicing dates updated',
+ 'inv_bad_date': '⛔ invalid date (use YYYY-MM-DD)',
+ 'c_alloc_noref': 'no map entries for ref {r} — create one in ✏️ Edit Map above, then assign',
  'err_vals': 'Pieces and metres must be > 0',
  'ok_cut': '✅ Cut registered: {pcs} pcs × {mpc} m/pc = {m}m',
  'card_conf': 'Contractor', 'card_pcs': 'PO Pieces', 'card_fref': 'Fabric Ref', 'card_cons': 'Expected Consumption',
@@ -1154,6 +1180,19 @@ def t(key, **kwargs):
     lang = st.session_state.get('lang', 'pt') if hasattr(st, 'session_state') else 'pt'
     txt = T.get(lang, T['pt']).get(key, T['pt'].get(key, key))
     return txt.format(**kwargs) if kwargs else txt
+
+# ===================== v5.5: MENSAGENS FLASH (persistentes) =====================
+def flash(kind, msg):
+    """Guarda confirmação para mostrar DEPOIS do st.rerun() — antes desaparecia num flash."""
+    st.session_state['_flash'] = (kind, msg)
+
+def show_flash():
+    """Mostra (1 vez) a mensagem guardada, no topo da página."""
+    f = st.session_state.pop('_flash', None) if hasattr(st, 'session_state') else None
+    if f:
+        kind, msg = f
+        {'success': st.success, 'warning': st.warning, 'error': st.error,
+         'info': st.info}.get(kind, st.success)(msg)
 
 # ===================== DB SETUP =====================
 DATA_DIR = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH", "data")
@@ -2044,6 +2083,14 @@ def init_db():
     # Migração v4.1: cor da PO garment (o upload CSV validava-a mas descartava-a)
     if 'color' not in prod_cols:
         cursor.execute("ALTER TABLE production ADD COLUMN color TEXT")
+    # Migração v5.4: data de faturação da PO (editável na vista INVOICED; preenchida
+    # automaticamente ao marcar INVOICED). Backfill a partir dos movimentos INVOICE.
+    if 'date_invoiced' not in prod_cols:
+        cursor.execute("ALTER TABLE production ADD COLUMN date_invoiced TEXT")
+        cursor.execute("""UPDATE production SET date_invoiced = (
+                              SELECT substr(MIN(m.date_time), 1, 10) FROM movements m
+                              WHERE m.po_garment = production.po_number AND m.move_type = 'INVOICE')
+                          WHERE status = 'INVOICED' AND date_invoiced IS NULL""")
 
     # Migração v4.2: encomendas de tecido ganham cor e local de entrega (tracking sai de cena)
     cursor.execute("PRAGMA table_info(incoming_fabric)")
@@ -2685,7 +2732,7 @@ def upload_section(kind):
             tot_m = sum(r['total_metres'] for r in ok_rows)
             log_movement('IMPORT', None, 'Excel/CSV', 'XBS', None, round(tot_m, 1), None,
                          f'{len(ok_rows)} encomendas de tecido importadas via ficheiro')
-        st.success(t('up_done', n=len(ok_rows)))
+        flash('success', t('up_done', n=len(ok_rows)))
         st.rerun()
 
 # ===================== PACKING LIST (rolos individuais em lote) =====================
@@ -2969,7 +3016,7 @@ def packing_section():
         msg = t('ok_pk', n=len(ok_rows), wh=wh_lbl, m=f"{tot_m:,.0f}")
         if received:
             msg += ' ' + t('pk_mark', pos=', '.join(received))
-        st.success(msg)
+        flash('success', msg)
         st.rerun()
 
 def safe_display_df(df):
@@ -3295,11 +3342,11 @@ def render_stock():
                                             AND (notes IS NULL OR notes NOT LIKE 'Consolidado%') GROUP BY ref_code""", (sf,)).values)
             fat = dict(query_to_df("""SELECT p.fabric_ref, ROUND(SUM(m.metres),1) m FROM movements m
                                       JOIN production p ON m.po_garment = p.po_number
-                                      WHERE m.move_type = 'INVOICE' AND substr(m.date_time,1,10) BETWEEN ? AND ?
+                                      WHERE m.move_type = 'INVOICE' AND COALESCE(p.date_invoiced, substr(m.date_time,1,10)) BETWEEN ? AND ?
                                       GROUP BY p.fabric_ref""", (si, sf)).values)
             fat_after = dict(query_to_df("""SELECT p.fabric_ref, ROUND(SUM(m.metres),1) m FROM movements m
                                             JOIN production p ON m.po_garment = p.po_number
-                                            WHERE m.move_type = 'INVOICE' AND substr(m.date_time,1,10) > ?
+                                            WHERE m.move_type = 'INVOICE' AND COALESCE(p.date_invoiced, substr(m.date_time,1,10)) > ?
                                             GROUP BY p.fabric_ref""", (sf,)).values)
             rows = []
             for ref in refs_all:
@@ -3416,7 +3463,7 @@ def render_stock():
                         execute_many("UPDATE fabric_rolls SET color = ? WHERE token = ?", [(ac_color, tok) for tok in targets])
                         log_movement('EDIT', None, ac_wh if ac_wh != 'Todos' else None, None, ac_ref, None, None,
                                      f'Cor atribuída → {ac_color} ({len(targets)} rolos)', ac_color)
-                        st.success(f"✅ {color_badge(ac_color)} {t('ok_color', n=len(targets), ref=ac_ref)}")
+                        flash('success', f"✅ {color_badge(ac_color)} {t('ok_color', n=len(targets), ref=ac_ref)}")
                         st.rerun()
 
         st.markdown(f'<div class="section-title">{t("s_export")}</div>', unsafe_allow_html=True)
@@ -3487,7 +3534,7 @@ def render_incoming():
                              ni_status, ni_dest, datetime.now().isoformat()))
                 log_movement('ORDER', None, final_sup, ni_dest, final_ref, round(ni_m, 1), ni_po.strip(),
                              f'Nova encomenda de tecido registada ({ni_status})')
-                st.success(t('ok_incoming', po=ni_po.strip(), m=f"{ni_m:,.0f}", ref=final_ref, s=ni_status))
+                flash('success', t('ok_incoming', po=ni_po.strip(), m=f"{ni_m:,.0f}", ref=final_ref, s=ni_status))
                 st.rerun()
 
     # ---------- 📤 CARGA EM MASSA (EXCEL/CSV) ----------
@@ -3518,7 +3565,7 @@ def render_incoming():
             if st.button(t('b_arrived'), key="incoming_arrived"):
                 execute_sql("UPDATE incoming_fabric SET status = 'RECEIVED' WHERE po_number = ?", (po_sel,))
                 log_movement('ARRIVAL', None, 'Fornecedor', 'XBS', None, None, None, f'PO tecido {po_sel} chegou — aguarda registo de rolos')
-                st.success(t('ok_arrived', po=po_sel))
+                flash('success', t('ok_arrived', po=po_sel))
                 st.rerun()
 
         # Timeline
@@ -3571,27 +3618,8 @@ def render_production():
                 expected_mpc, mpc_source = round(float(po_row['metres_expected']) / float(po_row['po_qty']), 3), 'po'
 
             if not map_entry:
-                # Alocação inline: associar modelo base à PO sem sair do ecrã
-                st.warning(t('p_no_map'))
-                st.markdown(f'<div class="section-subtitle">{t("p_alloc_inline")}</div>', unsafe_allow_html=True)
-                opts_df = query_to_df("SELECT base_model, fit, fabric_ref, m_per_pc_expected FROM consumption_map_v4 ORDER BY base_model, fit")
-                if not opts_df.empty:
-                    opts_df['lbl'] = opts_df.apply(
-                        lambda r: f"{r['base_model']}{' · ' + r['fit'] if r['fit'] else ''} · {r['fabric_ref']} · {r['m_per_pc_expected']:.2f} m/pc", axis=1)
-                    c1, c2 = st.columns([3, 1])
-                    with c1:
-                        sel_entry = st.selectbox(t('c_alloc_entry'), opts_df['lbl'].tolist(), key='live_alloc_entry')
-                    with c2:
-                        st.markdown('<div style="height:28px"></div>', unsafe_allow_html=True)
-                        do_alloc = st.button(t('b_alloc'), key='live_alloc_go')
-                    if do_alloc and sel_entry:
-                        er = opts_df[opts_df['lbl'] == sel_entry].iloc[0]
-                        execute_sql("UPDATE production SET base_model = ? WHERE po_number = ?",
-                                    (f"{er['base_model']}|{er['fit']}", po_sel))
-                        # v5.3: recalcula o real médio — registos de corte já lançados passam a contar
-                        update_map_actual(er['base_model'], er['fit'], er['fabric_ref'])
-                        st.success(t('ok_alloc', po=po_sel, bm=f"{er['base_model']}{' · ' + er['fit'] if er['fit'] else ''}"))
-                        st.rerun()
+                # v5.4: associação de modelo base só em Consumos (fonte única de verdade)
+                st.warning(t('p_no_map') + ' · ' + t('p_alloc_goto'))
 
             c1, c2, c3, c4 = st.columns(4)
             with c1:
@@ -3683,7 +3711,7 @@ def render_production():
                     log_movement('CUT', None, po_row['confeccionador'], po_row['confeccionador'],
                                  po_row['fabric_ref'], metres_real, po_sel,
                                  f"Corte registado: {pcs_cut} pcs, {metres_real:.1f}m, desvio {dev_pct:+.1f}%" if dev_pct is not None else f"Corte registado: {pcs_cut} pcs")
-                    st.success(t('ok_cut', pcs=pcs_cut, mpc=f"{real_mpc:.3f}", m=f"{metres_real:,.1f}") +
+                    flash('success', t('ok_cut', pcs=pcs_cut, mpc=f"{real_mpc:.3f}", m=f"{metres_real:,.1f}") +
                                (f" | {dev_pct:+.1f}%" if dev_pct is not None else ""))
                     st.rerun()
 
@@ -3693,19 +3721,65 @@ def render_production():
         status_filter = st.selectbox(t('p_view'), [t('v_active'), 'PENDING', 'CUTTING', 'INVOICED'], key="prod_filter")
 
         base_q = """SELECT p.po_number, fr.supplier as fornecedor, p.fabric_ref, p.color, p.model_name, p.confeccionador,
-                           p.po_qty, p.metres_expected, p.expected_date, p.status, p.base_model
+                           p.po_qty, p.metres_expected, p.expected_date, p.status, p.base_model, p.date_invoiced
                     FROM production p LEFT JOIN fabric_refs fr ON p.fabric_ref = fr.ref_code"""
         if status_filter == t('v_active'):
             q = base_q + " WHERE p.status IN ('PENDING','CUTTING') ORDER BY p.expected_date"
         else:
-            q = base_q + f" WHERE p.status = '{status_filter}' ORDER BY p.expected_date"
+            q = base_q + f" WHERE p.status = '{status_filter}' ORDER BY p.date_invoiced DESC, p.expected_date"
         prod_df = query_to_df(q)
 
         if status_filter == 'INVOICED':
             if not prod_df.empty:
-                clean = safe_display_df(add_total_row(prod_df.drop(columns=['base_model'])))
-                clean.columns = [t('c_po2'), t('c_fsup'), t('c_fref'), t('c_color'), t('c_model'), t('c_conf'), t('c_qty'), t('c_metres'), t('c_delivery'), t('c_state')]
-                render_table(clean, height=450)
+                # v5.4: data de faturação editável (controlo por semana) — semana CW calculada da data
+                st.markdown(f'<div class="section-subtitle">{t("inv_sub")}</div>', unsafe_allow_html=True)
+                def _cw(d):
+                    try:
+                        return 'CW' + str(date.fromisoformat(str(d)[:10]).isocalendar()[1]).zfill(2)
+                    except (ValueError, TypeError):
+                        return ''
+                inv_df = prod_df.drop(columns=['base_model']).copy()
+                inv_df['semana'] = inv_df['date_invoiced'].apply(_cw)
+                inv_ed = st.data_editor(
+                    inv_df,
+                    use_container_width=True, hide_index=True, num_rows="fixed", height=450,
+                    column_config={
+                        "po_number": st.column_config.TextColumn(t('c_po2'), disabled=True),
+                        "fornecedor": st.column_config.TextColumn(t('c_fsup'), disabled=True),
+                        "fabric_ref": st.column_config.TextColumn(t('c_fref'), disabled=True),
+                        "color": st.column_config.TextColumn(t('c_color'), disabled=True),
+                        "model_name": st.column_config.TextColumn(t('c_model'), disabled=True),
+                        "confeccionador": st.column_config.TextColumn(t('c_conf'), disabled=True),
+                        "po_qty": st.column_config.NumberColumn(t('c_qty'), disabled=True),
+                        "metres_expected": st.column_config.NumberColumn(t('c_metres'), format="%.1f", disabled=True),
+                        "expected_date": st.column_config.TextColumn(t('c_delivery'), disabled=True),
+                        "status": st.column_config.TextColumn(t('c_state'), disabled=True),
+                        "date_invoiced": st.column_config.TextColumn(t('inv_date')),
+                        "semana": st.column_config.TextColumn(t('inv_week'), disabled=True),
+                    },
+                    key="inv_editor")
+                if st.button(t('b_save_inv'), key="inv_save"):
+                    bad_d, n_d = [], 0
+                    prev_d_map = {r['po_number']: (str(r['date_invoiced'])[:10] if pd.notna(r['date_invoiced']) and r['date_invoiced'] else '')
+                                  for _, r in prod_df.iterrows()}
+                    for _, r in inv_ed.iterrows():
+                        dv = str(r['date_invoiced']).strip()[:10] if pd.notna(r['date_invoiced']) else ''
+                        if dv:
+                            try:
+                                date.fromisoformat(dv)
+                            except ValueError:
+                                bad_d.append((r['po_number'], dv))
+                                continue
+                        if dv != prev_d_map.get(r['po_number'], ''):
+                            execute_sql("UPDATE production SET date_invoiced = ? WHERE po_number = ?",
+                                        (dv or None, r['po_number']))
+                            n_d += 1
+                    if bad_d:
+                        st.error(t('inv_bad_date') + ': ' + ', '.join(f"{p} ({d})" for p, d in bad_d[:5]))
+                    if n_d:
+                        log_movement('EDIT', None, None, None, None, None, None, f'Datas de faturação atualizadas ({n_d} POs)')
+                        flash('success', t('ok_inv_date', n=n_d))
+                        st.rerun()
             else:
                 st.info(t('p_no_inv'))
         else:
@@ -3774,9 +3848,9 @@ def render_production():
                 edited = edited[edited['po_number'].astype(str).str.strip() != '']
                 conn = sqlite3.connect(DB_PATH)
                 cur = conn.cursor()
-                cur.execute("SELECT po_number, status, base_model FROM production")
-                prev = {r[0]: (r[1], r[2]) for r in cur.fetchall()}
-                invoiced_pos = {p for p, (stt, _) in prev.items() if stt == 'INVOICED'}
+                cur.execute("SELECT po_number, status, base_model, date_invoiced FROM production")
+                prev = {r[0]: (r[1], r[2], r[3]) for r in cur.fetchall()}
+                invoiced_pos = {p for p, (stt, _, _) in prev.items() if stt == 'INVOICED'}
                 existing = set(prev) - invoiced_pos
                 keep = set(edited['po_number'].astype(str))
                 for po_del in existing - keep:
@@ -3790,7 +3864,7 @@ def render_production():
                         continue
                     qty = 0 if pd.isna(r['po_qty']) else int(r['po_qty'])
                     m_val = 0.0 if pd.isna(r['metres_expected']) else float(r['metres_expected'])
-                    prev_st, prev_bm = prev.get(po_val, (None, None))
+                    prev_st, prev_bm, prev_dinv = prev.get(po_val, (None, None, None))
                     new_st = r['status'] if r['status'] in PROD_STATUSES else 'PENDING'
                     # v4: metros em falta → qty × standard do modelo base
                     if m_val <= 0 and qty > 0 and r['fabric_ref']:
@@ -3806,14 +3880,16 @@ def render_production():
                         n_inv += 1
                     elif new_st != prev_st and prev_st is not None:
                         pending_logs.append(('STATUS', None, None, None, None, None, po_val, f'Estado → {new_st}'))
+                    # v5.4: data de faturação — hoje ao marcar INVOICED; preservada nos restantes
+                    dinv = date.today().isoformat() if (new_st == 'INVOICED' and prev_st != 'INVOICED') else prev_dinv
                     cur.execute("""INSERT OR REPLACE INTO production
                                    (po_number, model_name, confeccionador, po_qty, fabric_ref, color, metres_expected,
-                                    expected_date, status, date_created, base_model)
-                                   VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                                    expected_date, status, date_created, base_model, date_invoiced)
+                                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
                                 (po_val, r['model_name'], r['confeccionador'], qty, r['fabric_ref'],
                                  str(r['color']).strip() if pd.notna(r['color']) and str(r['color']).strip() else None,
                                  m_val, r['expected_date'] if pd.notna(r['expected_date']) else None,
-                                 new_st, now_iso, prev_bm))
+                                 new_st, now_iso, prev_bm, dinv))
                     n += 1
                 conn.commit()
                 conn.close()
@@ -3821,7 +3897,7 @@ def render_production():
                     log_movement(*lg)
                 log_movement('EDIT', None, None, None, None, None, None, f'Tabela de produção atualizada ({n} POs)')
                 msg = t('ok_prod', n=n) + (t('ok_prod_inv', n=n_inv) if n_inv else '')
-                st.success(msg)
+                flash('success', msg)
                 st.rerun()
 
             # v5: aviso de coerência cor ↔ ref (ex.: cor de uma ref colada noutra)
@@ -3854,7 +3930,7 @@ def render_production():
                     elif st.button(t('b_pc_save'), key='pc_save'):
                         execute_sql("UPDATE production SET color = ? WHERE po_number = ?", (pc_color, pc_po))
                         log_movement('EDIT', None, None, None, pc_ref, None, pc_po, f'Cor da PO → {pc_color}', pc_color)
-                        st.success(t('ok_pc', po=pc_po, c=pc_color))
+                        flash('success', t('ok_pc', po=pc_po, c=pc_color))
                         st.rerun()
 
                     # ===== v5.1: sugestões automáticas (cor do nome do modelo ↔ cores da ref) =====
@@ -3881,7 +3957,7 @@ def render_production():
                                     execute_sql("UPDATE production SET color = ? WHERE po_number = ?", (p['sugerida'], p['po']))
                                     log_movement('EDIT', None, None, None, p['ref'], None, p['po'],
                                                  f'Cor da PO (auto) → {p["sugerida"]}', p['sugerida'])
-                            st.success(t('ok_pc_auto', n=len(auto_sel)))
+                            flash('success', t('ok_pc_auto', n=len(auto_sel)))
                             st.rerun()
 
                     # ===== v5.1: atribuição em massa (ref → cor → várias POs) =====
@@ -3908,7 +3984,7 @@ def render_production():
                             execute_sql("UPDATE production SET color = ? WHERE po_number = ?", (b_color, bpo))
                         log_movement('EDIT', None, None, None, b_ref, None, None,
                                      f'Cor em massa → {b_color} ({len(b_sel)} POs: {", ".join(b_sel[:8])}{"…" if len(b_sel) > 8 else ""})', b_color)
-                        st.success(t('ok_pc_bulk', n=len(b_sel), c=b_color))
+                        flash('success', t('ok_pc_bulk', n=len(b_sel), c=b_color))
                         st.rerun()
 
     # ---------- TAB CARREGAR POs (EXCEL/CSV) ----------
@@ -3989,7 +4065,7 @@ def render_consumos():
                         for _, r in edited_cm.iterrows()
                         if str(r['base_model'] or '').strip() and r['fabric_ref'] and r['m_per_pc_expected']]
                 execute_many("INSERT OR REPLACE INTO consumption_map_v4 VALUES (?,?,?,?,?)", rows)
-                st.success(t('ok_cm', n=len(rows)))
+                flash('success', t('ok_cm', n=len(rows)))
                 st.rerun()
 
         # 🔗 Associar modelo base a POs
@@ -4028,7 +4104,8 @@ def render_consumos():
                 assoc_disp.columns = [t('c_po2'), t('c_model'), t('c_fref'), t('c_basemodel'), t('c_mpc_col'), t('c_signal')]
                 render_table(assoc_disp, height=300)
 
-                # alterar/criar associação
+                # alterar/criar associação — v5.4: entradas filtradas pela REF da PO
+                # (ligar a uma entrada de outra ref não resolvia o consumo — ex.: PO4445)
                 opts_df = query_to_df("SELECT base_model, fit, fabric_ref, m_per_pc_expected FROM consumption_map_v4 ORDER BY base_model, fit")
                 if not opts_df.empty:
                     opts_df['lbl'] = opts_df.apply(
@@ -4037,15 +4114,19 @@ def render_consumos():
                     with c1:
                         po_pick = st.selectbox(t('c_alloc_po'), pos['po_number'].tolist(), key='alloc_po',
                                                format_func=lambda p: f"{p} — {pos[pos['po_number']==p].iloc[0]['model_name'][:40]}")
+                    po_ref = pos[pos['po_number'] == po_pick].iloc[0]['fabric_ref']
+                    ref_opts = opts_df[opts_df['fabric_ref'] == po_ref]
                     with c2:
-                        entry_pick = st.selectbox(t('c_alloc_entry'), opts_df['lbl'].tolist(), key='alloc_entry')
-                    if st.button(t('b_alloc'), key='alloc_go'):
+                        entry_pick = st.selectbox(t('c_alloc_entry'), ref_opts['lbl'].tolist(), key='alloc_entry') if not ref_opts.empty else None
+                    if ref_opts.empty:
+                        st.info(t('c_alloc_noref', r=po_ref))
+                    elif st.button(t('b_alloc'), key='alloc_go'):
                         er = opts_df[opts_df['lbl'] == entry_pick].iloc[0]
                         execute_sql("UPDATE production SET base_model = ? WHERE po_number = ?",
                                     (f"{er['base_model']}|{er['fit']}", po_pick))
                         # v5.3: recalcula o real médio — registos de corte já lançados passam a contar
                         update_map_actual(er['base_model'], er['fit'], er['fabric_ref'])
-                        st.success(t('ok_alloc', po=po_pick, bm=f"{er['base_model']}{' · ' + er['fit'] if er['fit'] else ''}"))
+                        flash('success', t('ok_alloc', po=po_pick, bm=f"{er['base_model']}{' · ' + er['fit'] if er['fit'] else ''}"))
                         st.rerun()
 
     # ---------- TAB ANDAMENTO & REGISTOS ----------
@@ -4226,7 +4307,7 @@ def _render_registos():
                             done.add((b, f, rr['ref']))
                             update_map_actual(b, f, rr['ref'])
                     log_movement('EDIT', None, None, None, None, None, None, f'Registos de consumo corrigidos ({n_up})')
-                    st.success(t('ok_reg', n=n_up))
+                    flash('success', t('ok_reg', n=n_up))
                     st.rerun()
 
             with st.expander(t('c_auth_title')):
@@ -4252,7 +4333,7 @@ def _render_registos():
                         for _, r in edited.iterrows():
                             execute_sql("UPDATE consumptions SET authorized = ?, authorized_note = ? WHERE id = ?",
                                         (1 if r['authorized'] else 0, r['authorized_note'] or None, int(r['id'])))
-                        st.success(t('ok_auth', n=len(edited)))
+                        flash('success', t('ok_auth', n=len(edited)))
                         st.rerun()
             download_pair(cons_df, f"consumos_{datetime.now().strftime('%Y%m%d')}", 'Consumos', 'cons_dl')
         else:
@@ -4322,7 +4403,7 @@ def render_movement():
                         m_val = rolls_avail[rolls_avail['token'] == tok].iloc[0]['metres']
                         c_val = rolls_avail[rolls_avail['token'] == tok].iloc[0]['color']
                         log_movement('TRANSFER', tok, m1_wh, m1_to, m1_ref, m_val, None, f'Rolo movido ({m1_status})', c_val)
-                    st.success(t('ok_m1', n=len(sel_tokens), m=f"{total_sel:,.1f}", a=m1_wh, b=m1_to))
+                    flash('success', t('ok_m1', n=len(sel_tokens), m=f"{total_sel:,.1f}", a=m1_wh, b=m1_to))
                     st.rerun()
 
     # ---------- MODO 2: LOTE AGREGADO ----------
@@ -4369,12 +4450,12 @@ def render_movement():
                                      datetime.now().isoformat(), datetime.now().isoformat(), f'Dividido de {lot_sel}'))
                         log_movement('SPLIT', new_tok, lot_row['warehouse'], m2_to, lot_row['ref_code'], m2_metres, None,
                                      f'Divisão de {lot_sel} ({m2_metres:.1f}m)', lot_row['color'])
-                        st.success(t('ok_m2_split', m=f"{m2_metres:,.1f}", tok=new_tok, to=m2_to))
+                        flash('success', t('ok_m2_split', m=f"{m2_metres:,.1f}", tok=new_tok, to=m2_to))
                     else:
                         execute_sql("UPDATE fabric_rolls SET warehouse = ?, status = ?, date_last_move = ? WHERE token = ?",
                                     (m2_to, m2_status, datetime.now().isoformat(), lot_sel))
                         log_movement('TRANSFER', lot_sel, lot_row['warehouse'], m2_to, lot_row['ref_code'], m2_metres, None, 'Lote movido total', lot_row['color'])
-                        st.success(t('ok_m2', tok=lot_sel, m=f"{m2_metres:,.1f}", to=m2_to))
+                        flash('success', t('ok_m2', tok=lot_sel, m=f"{m2_metres:,.1f}", to=m2_to))
                     st.rerun()
 
     # ---------- MODO 3: METROS CONSOLIDADOS ----------
@@ -4428,7 +4509,7 @@ def render_movement():
                                     (remaining, datetime.now().isoformat(), r['token']))
                         remaining = 0
                 log_movement('CONSOLIDATE', new_tok, m3_wh, m3_to, m3_ref, m3_metres, m3_po or None, f'{m3_metres:.1f}m consolidados (FIFO)')
-                st.success(t('ok_m3', m=f"{m3_metres:,.1f}", a=m3_wh, b=m3_to, tok=new_tok))
+                flash('success', t('ok_m3', m=f"{m3_metres:,.1f}", a=m3_wh, b=m3_to, tok=new_tok))
                 st.rerun()
 
     # ---------- RECEÇÃO ----------
@@ -4465,7 +4546,7 @@ def render_movement():
                              datetime.now().isoformat(), datetime.now().isoformat(), None))
                 log_movement('RECEIPT', token, 'Fornecedor', recv_wh, recv_ref, recv_metres, None,
                              f'Receção lote {recv_lot}' if recv_lot else 'Receção', recv_color or None)
-                st.success(t('ok_recv', tok=token, m=f"{recv_metres:,.1f}"))
+                flash('success', t('ok_recv', tok=token, m=f"{recv_metres:,.1f}"))
                 st.rerun()
             else:
                 st.error(t('err_metres'))
@@ -4494,7 +4575,7 @@ def render_movement():
                 execute_sql("UPDATE fabric_rolls SET status = 'INVOICED', notes = 'Faturado — saiu de em processo' WHERE po_garment = ? AND status = 'IN_PROCESS'", (invoice_po,))
                 execute_sql("UPDATE production SET status = 'INVOICED' WHERE po_number = ?", (invoice_po,))
                 log_movement('INVOICE', None, 'Em Processo', 'Faturado', None, inv_m, invoice_po, f'{inv_m:.1f}m faturados')
-                st.success(t('ok_inv2', po=invoice_po, m=f"{inv_m:,.1f}"))
+                flash('success', t('ok_inv2', po=invoice_po, m=f"{inv_m:,.1f}"))
                 st.rerun()
 
     # Regras
@@ -4726,12 +4807,13 @@ def main():
     st.sidebar.markdown(f"""
     <div style="position:fixed;bottom:20px;left:20px;right:20px;">
         <div style="border-top:1px solid var(--line);padding-top:12px;color:var(--faint);font-size:11px;text-align:center;">
-            v5.3 | {t('sb_data')}<br>{datetime.now().strftime('%Y-%m-%d')}<br>
+            v5.5 | {t('sb_data')}<br>{datetime.now().strftime('%Y-%m-%d')}<br>
             <span style="color:#3b82f6;font-weight:600;">SNT CMT</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
+    show_flash()  # v5.5: confirmações persistentes no topo da página
     tabs[selection]()
 
 if __name__ == "__main__":
