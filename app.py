@@ -1,6 +1,16 @@
 """
-SNT CMT - Sistema de Stock & Produção v5.2
+SNT CMT - Sistema de Stock & Produção v5.3
 Dados reais CW29 2026
+v5.3:
+- Contraste reforçado no tema clean (Edge/Chrome): contorno visível em todos os campos de
+  formulário (INPUT_BORDER por tema), bordas e muted mais fortes — fim dos campos
+  "branco sobre branco" no modo claro
+- Exports Excel formatados como a vista na app: cabeçalho azul corporativo, separador de
+  milhares, linha TOTAL em destaque, larguras automáticas e 1ª linha fixa. Vista por
+  período exporta com cabeçalhos no idioma + linha TOTAL; matriz cor × armazém idem
+- Consumos: ao associar manualmente uma PO a um modelo base (Consumos 🔗 ou inline no
+  Modo Live), o real médio do mapa é recalculado de imediato — cortes já lançados
+  passam a contar sem esperar pelo próximo corte
 v5.2:
 - Design corporativo SNT (azul #2E7CF6, superfícies planas, header com overline de marca)
   alinhado com o SNT Label Tool — paletas dark/clean reconstruídas com cores SÓLIDAS
@@ -101,8 +111,9 @@ THEMES = {
         'HEADER_BG': '#11151D',
         'CARD_BG': '#161A23',
         'CARD_BG_SOFT': '#131722',
-        'CARD_BORDER': '#252C3B',
+        'CARD_BORDER': '#28303F',
         'INPUT_BG': '#171C27',
+        'INPUT_BORDER': '#3C4659',
         'SIDEBAR_BG': '#10131A',
         'TABLE_HEAD': '#1B212E',
         'TABLE_ROW': '#131722',
@@ -117,18 +128,19 @@ THEMES = {
     },
     'clean': {
         'BG': '#F3F5F8',
-        'TEXT': '#131820', 'MUTED': '#4A5670', 'FAINT': '#66738B', 'ACCENT': '#2E7CF6',
+        'TEXT': '#131820', 'MUTED': '#414E68', 'FAINT': '#66738B', 'ACCENT': '#2E7CF6',
         'HEADER_BG': '#FFFFFF',
         'CARD_BG': '#FFFFFF',
         'CARD_BG_SOFT': '#FAFBFD',
-        'CARD_BORDER': '#E1E8F0',
+        'CARD_BORDER': '#CFDAE8',
         'INPUT_BG': '#FFFFFF',
+        'INPUT_BORDER': '#A9BAD0',
         'SIDEBAR_BG': '#FAFBFD',
-        'TABLE_HEAD': '#EFF3F9',
+        'TABLE_HEAD': '#E9EFF7',
         'TABLE_ROW': '#FFFFFF',
         'TABLE_ROW_HOVER': '#F0F6FE',
         'BAR_BG': '#E3E9F1',
-        'LINE': '#D2DBE7',
+        'LINE': '#C0CDDD',
         'BTN_SEC_BG': '#ECF1F7',
         'SHADOW': 'rgba(19,24,32,0.08)',
         'OK': '#0B7A41', 'WARN': '#B45309', 'BAD': '#D13438', 'INFO': '#1F6BE0',
@@ -582,6 +594,19 @@ CSS_TEMPLATE = """<style>
     /* Acessibilidade — foco visível ao navegar por teclado (Edge/Chrome) */
     *:focus-visible { outline: 2px solid var(--accent) !important; outline-offset: 1px !important; }
 
+    /* v5.3: contorno VISÍVEL dos campos de formulário (no clean estavam quase invisíveis) */
+    [data-baseweb="select"] > div,
+    .stTextInput input, .stNumberInput input, .stDateInput input, .stTextArea textarea {
+        border-color: __INPUT_BORDER__ !important;
+    }
+    [data-testid="stFileUploaderDropzone"] { border-width: 2px !important; border-color: __INPUT_BORDER__ !important; }
+    [data-testid="stDataFrame"] { border-color: __INPUT_BORDER__ !important; }
+    div[data-baseweb="popover"] ul[role="listbox"] { border-color: __INPUT_BORDER__ !important; }
+    [data-baseweb="select"] > div:focus-within,
+    .stTextInput input:focus, .stNumberInput input:focus, .stDateInput input:focus, .stTextArea textarea:focus {
+        border-color: var(--accent) !important;
+    }
+
     /* Contraste reforçado — textos pequenos sobem de --faint para --muted (≥ AA) */
     [data-testid="stCaptionContainer"] { font-size: 12.5px !important; }
     .section-subtitle { color: var(--muted); font-size: 12.5px; line-height: 1.55; }
@@ -642,7 +667,7 @@ T = {
  'm_tools': '🛠 Ferramentas',
  'sb_system': 'Sistema de Stock & Produção', 'sb_nav': 'Navegar', 'sb_data': 'Dados: CW29 2026',
  'sb_theme': '🎨 Tema', 'sb_lang': '🌐 Idioma',
- 'h_sub': 'Sistema de Stock & Produção v5.2 | CW29 2026',
+ 'h_sub': 'Sistema de Stock & Produção v5.3 | CW29 2026',
  'no_data': 'Sem dados para mostrar.',
  'k_avail': 'STOCK DISPONÍVEL', 'k_avail_d': 'armazém + stock conf.',
  'k_process': 'EM PROCESSO (CONF.)', 'k_process_d': 'POs garment ativas',
@@ -885,7 +910,7 @@ T = {
  'm_tools': '🛠 Tools',
  'sb_system': 'Fabric Stock & Production System', 'sb_nav': 'Navigate', 'sb_data': 'Data: CW29 2026',
  'sb_theme': '🎨 Theme', 'sb_lang': '🌐 Language',
- 'h_sub': 'Fabric Stock & Production System v5.2 | CW29 2026',
+ 'h_sub': 'Fabric Stock & Production System v5.3 | CW29 2026',
  'no_data': 'No data to display.',
  'k_avail': 'AVAILABLE STOCK', 'k_avail_d': 'warehouse + conf. stock',
  'k_process': 'IN PROCESS (CONF.)', 'k_process_d': 'active garment POs',
@@ -2192,9 +2217,43 @@ def get_stock_position():
 
 # ===================== EXPORT =====================
 def to_excel(df, sheet_name='Dados'):
+    """Excel formatado (v5.3) — como a vista na app: cabeçalho azul corporativo, números
+    com separador de milhares, linha TOTAL em destaque, larguras automáticas, 1ª linha fixa."""
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df.to_excel(writer, sheet_name=sheet_name, index=False)
+        df.to_excel(writer, sheet_name=sheet_name, index=False, startrow=1, header=False)
+        wb, ws = writer.book, writer.sheets[sheet_name]
+        f_head = wb.add_format({'bold': True, 'font_color': '#FFFFFF', 'bg_color': '#2569E8',
+                                'border': 1, 'border_color': '#C9D6EC', 'valign': 'vcenter'})
+        f_txt = wb.add_format({'border': 1, 'border_color': '#E3E9F2'})
+        f_num = wb.add_format({'border': 1, 'border_color': '#E3E9F2', 'num_format': '#,##0.0', 'align': 'right'})
+        f_int = wb.add_format({'border': 1, 'border_color': '#E3E9F2', 'num_format': '#,##0', 'align': 'right'})
+        f_txt_t = wb.add_format({'bold': True, 'bg_color': '#EFF3F9', 'border': 1,
+                                 'border_color': '#C9D6EC', 'top': 2})
+        f_num_t = wb.add_format({'bold': True, 'bg_color': '#EFF3F9', 'border': 1,
+                                 'border_color': '#C9D6EC', 'top': 2, 'num_format': '#,##0.0', 'align': 'right'})
+        for c, col in enumerate(df.columns):
+            ws.write(0, c, str(col), f_head)
+        n_rows = len(df)
+        for r in range(n_rows):
+            is_tot = str(df.iat[r, 0]).startswith('— TOTAL')
+            for c in range(len(df.columns)):
+                v = df.iat[r, c]
+                if pd.isna(v):
+                    ws.write_blank(r + 1, c, None, f_num_t if is_tot else f_num)
+                elif isinstance(v, (int, float)) and not isinstance(v, bool):
+                    if is_tot:
+                        ws.write_number(r + 1, c, float(v), f_num_t)
+                    else:
+                        ws.write_number(r + 1, c, float(v), f_int if float(v).is_integer() else f_num)
+                else:
+                    ws.write_string(r + 1, c, str(v), f_txt_t if is_tot else f_txt)
+        for c, col in enumerate(df.columns):
+            max_len = len(str(col))
+            if n_rows:
+                max_len = max(max_len, int(df.iloc[:, c].astype(str).str.len().max()))
+            ws.set_column(c, c, min(42, max(10, max_len + 3)))
+        ws.freeze_panes(1, 0)
     output.seek(0)
     return output
 
@@ -3185,7 +3244,7 @@ def render_stock():
                 h1 = '<th colspan="2"></th>' + ''.join(f'<th colspan="2" style="text-align:center;">{"🏭 " if w in WAREHOUSES else "👕 "}{html.escape(w)}</th>' for w in entities) + '<th></th>'
                 h2 = '<th>Ref</th><th>Cor</th>' + ''.join('<th class="num">D</th><th class="num">P</th>' for _ in entities) + f'<th class="num">{t("c_totalm")}</th>'
                 st.markdown(f'<div class="tbl-wrap" style="max-height:520px;"><table class="tbl"><thead><tr>{h1}</tr><tr>{h2}</tr></thead><tbody>{body}<tr class="tr-total">{tot_tds}</tr></tbody></table></div>', unsafe_allow_html=True)
-                # export achatado
+                # export achatado (v5.3: igual à vista — cabeçalhos no idioma + linha TOTAL)
                 flat_rows = []
                 for ref, cor in row_keys:
                     row = {'ref_code': ref, 'color': cor}
@@ -3194,7 +3253,9 @@ def render_stock():
                         row[f'{w} (D)'], row[f'{w} (P)'] = d, p
                     row['TOTAL'] = sum(v for k, v in row.items() if k.endswith(')') )
                     flat_rows.append(row)
-                download_pair(pd.DataFrame(flat_rows), f"matriz_cor_armazem_{datetime.now().strftime('%Y%m%d')}", 'Matriz Cor', 'mx_dl')
+                flat_df = add_total_row(pd.DataFrame(flat_rows))
+                flat_df = flat_df.rename(columns={'ref_code': t('c_ref'), 'color': t('c_color')})
+                download_pair(flat_df, f"matriz_cor_armazem_{datetime.now().strftime('%Y%m%d')}", 'Matriz Cor', 'mx_dl')
 
         # ===== v5: Vista por período (entradas / faturado / posição reconstruída) =====
         with st.expander(t('s_period')):
@@ -3254,7 +3315,10 @@ def render_stock():
                 disp_pdf.columns = [t('c_ref'), t('sp_ini'), t('sp_in'), t('sp_out'), t('sp_end')]
                 st.markdown(f'<div class="section-subtitle">{si} → {sf}</div>', unsafe_allow_html=True)
                 render_table(disp_pdf, height=400)
-                download_pair(pd.DataFrame(rows), f"stock_periodo_{si}_{sf}", 'Stock Período', 'sp_dl')
+                # v5.3: export igual à vista — cabeçalhos no idioma + linha TOTAL + formato
+                exp_pdf = pdf_.copy()
+                exp_pdf.columns = [t('c_ref'), t('sp_ini'), t('sp_in'), t('sp_out'), t('sp_end')]
+                download_pair(exp_pdf, f"stock_periodo_{si}_{sf}", 'Stock Período', 'sp_dl')
             else:
                 st.info(t('no_data'))
 
@@ -3524,6 +3588,8 @@ def render_production():
                         er = opts_df[opts_df['lbl'] == sel_entry].iloc[0]
                         execute_sql("UPDATE production SET base_model = ? WHERE po_number = ?",
                                     (f"{er['base_model']}|{er['fit']}", po_sel))
+                        # v5.3: recalcula o real médio — registos de corte já lançados passam a contar
+                        update_map_actual(er['base_model'], er['fit'], er['fabric_ref'])
                         st.success(t('ok_alloc', po=po_sel, bm=f"{er['base_model']}{' · ' + er['fit'] if er['fit'] else ''}"))
                         st.rerun()
 
@@ -3977,6 +4043,8 @@ def render_consumos():
                         er = opts_df[opts_df['lbl'] == entry_pick].iloc[0]
                         execute_sql("UPDATE production SET base_model = ? WHERE po_number = ?",
                                     (f"{er['base_model']}|{er['fit']}", po_pick))
+                        # v5.3: recalcula o real médio — registos de corte já lançados passam a contar
+                        update_map_actual(er['base_model'], er['fit'], er['fabric_ref'])
                         st.success(t('ok_alloc', po=po_pick, bm=f"{er['base_model']}{' · ' + er['fit'] if er['fit'] else ''}"))
                         st.rerun()
 
@@ -4658,7 +4726,7 @@ def main():
     st.sidebar.markdown(f"""
     <div style="position:fixed;bottom:20px;left:20px;right:20px;">
         <div style="border-top:1px solid var(--line);padding-top:12px;color:var(--faint);font-size:11px;text-align:center;">
-            v5.2 | {t('sb_data')}<br>{datetime.now().strftime('%Y-%m-%d')}<br>
+            v5.3 | {t('sb_data')}<br>{datetime.now().strftime('%Y-%m-%d')}<br>
             <span style="color:#3b82f6;font-weight:600;">SNT CMT</span>
         </div>
     </div>

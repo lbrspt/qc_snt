@@ -1,3 +1,13 @@
+## v5.3 — Contraste clean reforçado (Edge) · Exports Excel formatados · Mapa recalcula ao associar modelo
+
+| Pedido | Implementação |
+|---|---|
+| **1) Contraste entre browsers (Edge/clean)** | No modo claro os campos de formulário estavam quase invisíveis (branco sobre branco). Novo `INPUT_BORDER` por tema: todos os inputs, selects, datas, uploaders e grelhas têm agora contorno visível (azul ao focar); bordas e texto secundário do clean mais fortes. Se no Edge ainda vires cores estranhas, verifica `edge://flags/#enable-force-dark` (o "modo escuro automático" inverte as cores por cima de qualquer CSS — deve estar desligado) |
+| **2) Export da Vista por período igual à vista** | Todos os exports Excel passam a sair **formatados como a app**: cabeçalho azul corporativo, números com separador de milhares, linha **TOTAL** em destaque, larguras automáticas e primeira linha fixa. A Vista por período exporta agora com cabeçalhos no idioma (Ref, Stock Início, Entradas, Faturado, Stock Fim) + linha TOTAL; a matriz cor × armazém também ganha linha TOTAL |
+| **3) Consumos — dúvidas** | **a)** Sim: o ⚡ Modo Live serve também para POs sem valor estimado — regista pcs + metros reais e o corte fica guardado (desvio fica "—" até haver valor esperado). **b)** Sim: lançamentos novos são SEMPRE no Modo Live; correções de valores já lançados fazem-se em Consumos » 🏃 Andamento & Registos » ✏️ Corrigir registos reais. Novo: ao associares a PO a um modelo base (🔗 Consumos ou inline no Live), o **real médio do mapa é recalculado na hora** — os cortes já lançados passam a contar imediatamente |
+
+---
+
 ## v5.2 — Design corporativo SNT · Contraste garantido em Edge e Chrome · Responsivo PC/mobile
 
 | Pedido | Implementação |
