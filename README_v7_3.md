@@ -1,3 +1,44 @@
+## v7.3 — Tecido a chegar: cor específica · faturação → stock em trânsito · packing = quantidade líquida
+
+> Nova cadeia do tecido: **encomenda (com cor) → faturada pelo fornecedor (entra em stock na quantidade encomendada) → packing list (ajusta para a quantidade líquida entregue/faturada) → receção.**
+
+| Pedido | Implementação |
+|---|---|
+| **Alocar cor específica ao tecido a chegar** | A cor passa a ser **obrigatória** no formulário de nova encomenda. A tabela de encomendas em aberto é agora uma **grelha editável** (cor + data de faturação) — as encomendas antigas sem cor completam-se diretamente na grelha |
+| **Data de faturação da PO de tecido** | Nova coluna `date_invoiced` (migração idempotente), editável na grelha com validação AAAA-MM-DD, visível também na timeline |
+| **Faturada → entra em stock a quantidade encomendada** | Ao gravar a data de faturação, a encomenda passa a **INVOICED** e é criado automaticamente um **rolo consolidado em stock** (ref + cor + metros encomendados, no destino) sinalizado **"Em trânsito"**. Conta como stock (posição, armazéns, planeamento) mas **não é consumível** — fica excluído do corte (token v7.2), do Movimentar (M1/M3) e da Regularização até chegar. **Limpar a data reverte** (rolo removido) enquanto estiver intacto; se já foi movido/consumido, avisa para regularizar |
+| **Packing → quantidade líquida** | A importação de packing passa a aceitar POs **INVOICED** e, ao receber, **substitui o rolo em trânsito pela quantidade líquida** dos rolos do packing — o Δ (encomendado vs líquido) fica registado como movimento **PACK-ADJ** e no aviso de confirmação. Sem packing, **"Marcar chegada"** confirma o rolo em trânsito como stock físico (perde a sinalização e passa a consumível) |
+| **Coerência do resto do sistema** | "A chegar" (posição/planeamento) deixa de contar POs faturadas (já estão em stock — sem duplicação); alertas de **tecido em atraso** passam a incluir faturadas em trânsito não recebidas |
+
+---
+
+## v7.2 — Cadeia de vida do rolo fechada: token sempre atribuído (corte → em processo → faturado)
+
+> Regra de negócio (confirmada): **ao locar corte, os rolos passam de stock para em processo; ao faturar, saem de em processo; o token da PO tem de estar atribuído quer seja metragem agrupada, quer rolos individuais.** A auditoria v7.1 mostrou que a cadeia estava partida em dois pontos — esta versão fecha-a.
+
+| Ponto da cadeia | Antes (partido) | Agora (v7.2) |
+|---|---|---|
+| **Locar corte** | Registava o consumo mas **não mexia nos rolos** — nada passava de stock para em processo, nada ficava com token | Ao confirmar o corte (modo live), os metros cortados passam **automaticamente** para em processo **com o token da PO**: 1º rolos já em processo no confeccionador sem token (ganham o token), 2º rolos AVAILABLE da ref+cor em **FIFO** — sempre com **divisão exata** do último rolo. Reconciliação **cumulativa**: cortes parciais da mesma PO acumulam sem duplicar nem saltar rolos. Se faltar stock, aviso com os metros em falta (e aparece nos 🚨 Alertas) |
+| **M1 — rolos individuais** | Movia para Em Processo **sem token** | **Dropdown de POs ativas da ref, obrigatório** ao mover para Em Processo — cada rolo fica com o token (movimentos dentro de armazém como AVAILABLE não precisam) |
+| **M2 — lote agregado** | Idem, nem na divisão parcial | Igual a M1 — token obrigatório, aplicado ao lote movido **e** ao novo lote da divisão |
+| **M3 — metros consolidados** | PO em **texto livre** (podia ficar vazio ou errado) | **Dropdown validado** de POs ativas da ref; obrigatório quando o destino é confeccionador; o lote consolidado herda cor da PO como antes |
+| **Faturar** | `IN_PROCESS → INVOICED` só dos rolos **com token** — como quase nenhum tinha, deduzia 0m (foi o caso da POAPS2000004348) | Regra mantida — e como a montante o token fica **sempre** atribuído, a baixa passa a acontecer sempre. O ⚖️ Regularizar (v7.1) continua disponível para POs antigas |
+
+**Extra:** as confirmações (flash) passam a suportar **várias mensagens** — ex.: corte registado + aviso de stock em falta, tudo visível após o refresh.
+
+---
+
+## v7.1 — Cor editável em faturadas · ⚖️ Regularizar baixa de metros
+
+| Pedido | Implementação |
+|---|---|
+| **PO faturada sem cor (POAPS2000004348)** | A vista **Produção » INVOICED** passa a permitir editar a **cor da PO** (dropdown com validação por ref — a mesma regra da tabela principal). Corrigir a cor atualiza logo o Andamento, a matriz cor × armazém e as roturas dinâmicas, que leem a cor da PO |
+| **Baixa de metros em falta** | Causa: a faturação só deduz rolos **ligados à PO** (token); se a PO foi faturada sem rolos ligados, só mudou o estado — os metros ficaram em stock. Nova secção **⚖️ Regularizar baixa de metros** na vista INVOICED: por PO mostra consumido (cortes reais) vs já deduzido e o que falta; **⚡ FIFO automático** tira os metros dos rolos mais antigos da ref+cor com **divisão exata do último rolo** (o resto fica disponível), ou escolhes os rolos manualmente. Tudo registado como movimento INVOICE |
+
+**Como resolver a POAPS2000004348:** Produção » INVOICED → na linha da PO escolhe a cor (TCB258/EC1 — para "Almond" será Beige 0862 ou equivalente) → 💾 Guardar → em ⚖️ Regularizar baixa seleciona a PO (aparece "em falta 765m" — o corte real) → ⚡ Baixa automática FIFO. Fica cor atribuída + 765m deduzidos do stock + rasto completo em Movimentos.
+
+---
+
 ## v7.0 — Simplificação total: 6 menus · automações sem clique · receção num clique
 
 > Critério: **nada se perde, tudo se funde**. Todas as funções continuam disponíveis — com menos navegação e menos confirmações manuais.

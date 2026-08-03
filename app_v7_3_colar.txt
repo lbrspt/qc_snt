@@ -1,6 +1,17 @@
 """
-SNT CMT - Sistema de Stock & Produção v7.2
+SNT CMT - Sistema de Stock & Produção v7.3
 Dados reais CW29 2026
+v7.3 (TECIDO A CHEGAR: cor específica + faturação → stock → packing líquido):
+- Cor específica obrigatória na encomenda de tecido (formulário valida; grelha editável
+  permite completar encomendas antigas) e nova coluna Data Faturação na PO de tecido
+- Ao faturar (data gravada na grelha): a quantidade encomendada entra logo em stock como
+  rolo consolidado sinalizado "Em trânsito" — conta como stock mas não é consumível
+  (excluído de corte, Movimentar e Regularizar) até chegar. Limpar a data reverte
+  enquanto o rolo estiver intacto
+- Ao receber packing list ligada: o rolo em trânsito é substituído pela quantidade
+  LÍQUIDA entregue/faturada (Δ registado em movimentos PACK-ADJ)
+- "Marcar chegada" confirma o rolo em trânsito como stock físico (passa a consumível);
+  alertas de tecido em atraso passam a incluir POs faturadas em trânsito
 v7.2 (CADEIA DE VIDA DO ROLO — token sempre atribuído):
 - Ao locar corte (modo live): os rolos passam automaticamente de stock → em processo
   COM o token da PO. Reconciliação cumulativa (cortes parciais acumulam): 1º rolos já
@@ -723,7 +734,7 @@ T = {
  'm_tools': '🛠 Ferramentas',
  'sb_system': 'Sistema de Stock & Produção', 'sb_nav': 'Navegar', 'sb_data': 'Dados: CW29 2026',
  'sb_theme': '🎨 Tema', 'sb_lang': '🌐 Idioma',
- 'h_sub': 'Sistema de Stock & Produção v7.2 | CW29 2026',
+ 'h_sub': 'Sistema de Stock & Produção v7.3 | CW29 2026',
  'no_data': 'Sem dados para mostrar.',
  'k_avail': 'STOCK DISPONÍVEL', 'k_avail_d': 'armazém + stock conf.',
  'k_process': 'EM PROCESSO (CONF.)', 'k_process_d': 'POs garment ativas',
@@ -768,7 +779,7 @@ T = {
  'ok_color': 'aplicada a {n} rolos de {ref}.',
  'ok_nocolor': '✅ Sem rolos por colorir com estes filtros.',
  'i_title': '🚢 A Chegar',
- 'i_sub': 'Encomendas de tecido pendentes — só contam para planeamento, não entram no stock líquido',
+ 'i_sub': 'Encomendas de tecido em aberto — ao serem faturadas entram logo em stock (em trânsito, quantidade encomendada); ao receber packing ajusta para a quantidade líquida',
  'i_none': 'Nenhuma encomenda pendente.', 'i_mark': 'Marcar chegada',
  'i_new': '➕ Nova encomenda de tecido',
  'i_new_sub': 'regista a PO de tecido — fica pendente até chegar. ao chegar: marca a chegada aqui; depois regista os rolos em 🛠️ Ferramentas → 🚚 Movimentar → 📥 Receção.',
@@ -776,7 +787,7 @@ T = {
  'b_add_incoming': '💾 Registar encomenda',
  'err_po_dup': '⚠️ Essa PO já existe.', 'err_required': '⚠️ Preenche PO, fornecedor, ref e metros (> 0).',
  'ok_incoming': '✅ Encomenda {po} registada: {m}m de {ref} ({s}).',
- 'i_mark_sub': 'um clique: marca a chegada E cria o rolo consolidado no destino (v7). se vais carregar packing list, salta este passo — a importação marca a chegada por ti',
+ 'i_mark_sub': 'um clique: marca a chegada E confirma o stock no destino — se a PO estava faturada, o rolo em trânsito fica confirmado; se não havia rolo, cria o consolidado. se vais carregar packing list, salta este passo — a importação marca a chegada e ajusta ao líquido por ti',
  'c_dest': 'Local Entrega',
  'i_po': 'PO de tecido', 'b_arrived': '✓ Chegou',
  'ok_arrived': 'PO {po} marcada como recebida. Regista agora os rolos em 🚚 Movimentar → Receção.',
@@ -898,6 +909,17 @@ T = {
  'no_po_ref': '⚠️ sem POs ativas (PENDING/CUTTING) para {ref} — cria/carrega a PO antes de mover para Em Processo',
  'ok_link_cut': '🔗 {m}m com token ({ns} rolos stock→processo · {ne} já em processo)',
  'warn_cut_gap': '⚠️ stock insuficiente: faltam {m}m por cobrir com token para este corte — vê 🚨 Alertas',
+ # ===== v7.3 TECIDO: FATURAÇÃO → STOCK EM TRÂNSITO → PACKING LÍQUIDO =====
+ 'i_grid_sub': 'edita a cor específica e a data de faturação na grelha · ao gravar, POs faturadas entram logo em stock (quantidade encomendada, sinalizada “Em trânsito”) · limpar a data reverte enquanto o rolo estiver intacto',
+ 'b_inc_save': '💾 Guardar encomendas',
+ 'i_totals': '{n} encomendas em aberto · {m}m totais (🚚 {t}m faturados em trânsito)',
+ 'ok_inc_colors': '🎨 {n} cores atualizadas',
+ 'ok_transit': '🚚 {n} faturadas → stock em trânsito',
+ 'ok_transit_rev': '↩️ {n} faturações anuladas (rolo em trânsito removido)',
+ 'warn_transit_rev': '⚠️ rolo em trânsito já movido/consumido — regulariza em ⚙️ Sistema » Movimentar',
+ 'err_inc_color': '⚠️ aloca uma cor específica ao tecido — a cor é obrigatória na encomenda',
+ 'ok_arrived_transit': '✅ {po} recebida — rolo em trânsito {tok} confirmado em stock ({m}m)',
+ 'pk_net_done': '🔄 ajuste líquido:',
  'err_vals': 'Peças e metros têm de ser > 0',
  'ok_cut': '✅ Corte registado: {pcs} pcs × {mpc} m/pc = {m}m',
  'card_conf': 'Confeccionador', 'card_pcs': 'Peças PO', 'card_fref': 'Ref Tecido', 'card_cons': 'Consumo Esperado',
@@ -1039,7 +1061,7 @@ T = {
  'm_tools': '🛠 Tools',
  'sb_system': 'Fabric Stock & Production System', 'sb_nav': 'Navigate', 'sb_data': 'Data: CW29 2026',
  'sb_theme': '🎨 Theme', 'sb_lang': '🌐 Language',
- 'h_sub': 'Fabric Stock & Production System v7.2 | CW29 2026',
+ 'h_sub': 'Fabric Stock & Production System v7.3 | CW29 2026',
  'no_data': 'No data to display.',
  'k_avail': 'AVAILABLE STOCK', 'k_avail_d': 'warehouse + conf. stock',
  'k_process': 'IN PROCESS (CONF.)', 'k_process_d': 'active garment POs',
@@ -1084,7 +1106,7 @@ T = {
  'ok_color': 'applied to {n} rolls of {ref}.',
  'ok_nocolor': '✅ No rolls left to color with these filters.',
  'i_title': '🚢 Incoming',
- 'i_sub': 'Pending fabric orders — they count for planning only, not for net stock',
+ 'i_sub': 'Open fabric orders — once invoiced they enter stock immediately (in transit, ordered quantity); on packing receipt it adjusts to the net quantity',
  'i_none': 'No pending orders.', 'i_mark': 'Mark arrival',
  'i_new': '➕ New fabric order',
  'i_new_sub': 'register the fabric PO — it stays pending until it arrives. on arrival: mark it here; then register the rolls in 🛠️ Tools → 🚚 Move Fabric → 📥 Receiving.',
@@ -1092,7 +1114,7 @@ T = {
  'b_add_incoming': '💾 Save order',
  'err_po_dup': '⚠️ That PO already exists.', 'err_required': '⚠️ Fill in PO, supplier, ref and metres (> 0).',
  'ok_incoming': '✅ Order {po} saved: {m}m of {ref} ({s}).',
- 'i_mark_sub': 'one click: marks the arrival AND creates the consolidated roll at the destination (v7). if you are uploading a packing list, skip this — the import marks the arrival for you',
+ 'i_mark_sub': 'one click: marks the arrival AND confirms stock at the destination — if the PO was invoiced, the transit roll is confirmed; if there was no roll, the consolidated one is created. if you are uploading a packing list, skip this — the import marks the arrival and adjusts to net for you',
  'c_dest': 'Delivery Location',
  'i_po': 'Fabric PO', 'b_arrived': '✓ Arrived',
  'ok_arrived': 'PO {po} marked as received. Now register the rolls in 🚚 Move Fabric → Receiving.',
@@ -1214,6 +1236,17 @@ T = {
  'no_po_ref': '⚠️ no active POs (PENDING/CUTTING) for {ref} — create/upload the PO before moving to In Process',
  'ok_link_cut': '🔗 {m}m token-linked ({ns} rolls stock→process · {ne} already in process)',
  'warn_cut_gap': '⚠️ insufficient stock: {m}m still token-less for this cut — see 🚨 Alerts',
+ # ===== v7.3 FABRIC: INVOICING → IN-TRANSIT STOCK → NET PACKING =====
+ 'i_grid_sub': 'edit the specific colour and the invoicing date in the grid · on save, invoiced POs enter stock immediately (ordered quantity, flagged “In transit”) · clearing the date reverts while the roll is intact',
+ 'b_inc_save': '💾 Save fabric orders',
+ 'i_totals': '{n} open orders · {m}m total (🚚 {t}m invoiced in transit)',
+ 'ok_inc_colors': '🎨 {n} colours updated',
+ 'ok_transit': '🚚 {n} invoiced → in-transit stock',
+ 'ok_transit_rev': '↩️ {n} invoicings reverted (transit roll removed)',
+ 'warn_transit_rev': '⚠️ transit roll already moved/consumed — fix in ⚙️ System » Movement',
+ 'err_inc_color': '⚠️ allocate a specific colour to the fabric — colour is required on the order',
+ 'ok_arrived_transit': '✅ {po} received — transit roll {tok} confirmed in stock ({m}m)',
+ 'pk_net_done': '🔄 net adjustment:',
  'err_vals': 'Pieces and metres must be > 0',
  'ok_cut': '✅ Cut registered: {pcs} pcs × {mpc} m/pc = {m}m',
  'card_conf': 'Contractor', 'card_pcs': 'PO Pieces', 'card_fref': 'Fabric Ref', 'card_cons': 'Expected Consumption',
@@ -2294,6 +2327,9 @@ def init_db():
         cursor.execute("ALTER TABLE incoming_fabric ADD COLUMN color TEXT")
     if 'destination' not in inc_cols:
         cursor.execute("ALTER TABLE incoming_fabric ADD COLUMN destination TEXT")
+    # Migração v7.3: data de faturação da PO de tecido — ao faturar entra em stock em trânsito
+    if 'date_invoiced' not in inc_cols:
+        cursor.execute("ALTER TABLE incoming_fabric ADD COLUMN date_invoiced TEXT")
 
     # Consistência v3.8: PO com cortes registados está em CUTTING
     cursor.execute("""UPDATE production SET status = 'CUTTING' WHERE status = 'PENDING'
@@ -2521,7 +2557,7 @@ def compute_alerts():
                            'msg': f"{r['po_number']} · {r['model_name']} ({r['fabric_ref'] or '—'})"})
     late = query_to_df("""SELECT po_number, supplier, ref_code, total_metres, expected_date
                           FROM incoming_fabric
-                          WHERE status IN ('EXPECTED','IN_TRANSIT') AND expected_date < ?
+                          WHERE status IN ('EXPECTED','IN_TRANSIT','INVOICED') AND expected_date < ?
                           ORDER BY expected_date""", (date.today().isoformat(),))
     for _, r in late.iterrows():
         try:
@@ -2659,7 +2695,7 @@ def link_rolls_for_cut(po, ref, color, conf, target_m):
     # B) rolos em stock (AVAILABLE) → em processo no confeccionador, com token
     if gap > 0.05:
         for r in query_to_df(f"""SELECT token, metres, color, warehouse, lot, date_received FROM fabric_rolls
-                                 WHERE ref_code = ? {color_sql} AND status = 'AVAILABLE'
+                                 WHERE ref_code = ? {color_sql} AND status = 'AVAILABLE' {TRANSIT_FILTER}
                                  ORDER BY date_received, token""", base_params).to_dict('records'):
             if gap <= 0.05:
                 break
@@ -2683,6 +2719,60 @@ def link_rolls_for_cut(po, ref, color, conf, target_m):
             gap -= take
     stats['gap'] = max(gap, 0.0)
     return stats
+
+TRANSIT_NOTE = 'Em trânsito — PO '  # prefixo das notas dos rolos de tecido faturado a caminho
+TRANSIT_FILTER = "AND (notes IS NULL OR notes NOT LIKE 'Em trânsito%')"  # rolos em trânsito não são consumíveis
+
+def launch_transit_roll(po, date_inv):
+    """v7.3: PO de tecido faturada → a quantidade encomendada entra logo em stock,
+    sinalizada 'Em trânsito' (não consumível até chegar/packing). Devolve (token, metros) ou None."""
+    r = query_to_df("SELECT ref_code, color, total_metres, destination FROM incoming_fabric WHERE po_number = ?", (po,))
+    if r.empty:
+        return None
+    r = r.iloc[0]
+    ref = r['ref_code'] if pd.notna(r['ref_code']) and r['ref_code'] else None
+    if not ref:
+        return None
+    if not query_to_df("SELECT 1 FROM fabric_rolls WHERE notes LIKE ?", (f'%PO {po}%',)).empty:
+        return None  # já existe rolo ligado a esta PO (trânsito ou packing)
+    wh = r['destination'] if pd.notna(r['destination']) and r['destination'] in (WAREHOUSES + CONFECCIONADORES) else 'XBS'
+    cor = r['color'] if pd.notna(r['color']) and r['color'] else None
+    tok = next_token('R', ref)
+    now = datetime.now().isoformat()
+    execute_sql("INSERT INTO fabric_rolls VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (tok, ref, float(r['total_metres']), po, cor, wh, 'AVAILABLE', None,
+                 str(date_inv)[:10] if date_inv else now, now, f'{TRANSIT_NOTE}{po}'))
+    log_movement('TRANSIT', tok, 'Fornecedor', wh, ref, float(r['total_metres']), po,
+                 f'PO tecido faturada — {float(r["total_metres"]):.1f}m entram em stock em trânsito', cor)
+    return tok, float(r['total_metres'])
+
+def revert_transit_roll(po):
+    """v7.3: anula a entrada em stock em trânsito SE o rolo ainda estiver intacto.
+    Devolve 'ok' | 'blocked' (já movido/consumido) | 'none' (não existe)."""
+    rr = query_to_df("SELECT token, metres, status FROM fabric_rolls WHERE notes = ?", (f'{TRANSIT_NOTE}{po}',))
+    if rr.empty:
+        return 'none'
+    rr = rr.iloc[0]
+    exp = query_to_df("SELECT total_metres FROM incoming_fabric WHERE po_number = ?", (po,))
+    exp_m = float(exp.iloc[0]['total_metres']) if not exp.empty else float(rr['metres'])
+    if rr['status'] != 'AVAILABLE' or abs(float(rr['metres']) - exp_m) > 0.05:
+        return 'blocked'
+    execute_sql("DELETE FROM fabric_rolls WHERE token = ?", (rr['token'],))
+    log_movement('TRANSIT-REV', rr['token'], None, None, None, float(rr['metres']), po,
+                 f'Faturação anulada — rolo em trânsito removido ({float(rr["metres"]):.1f}m)')
+    return 'ok'
+
+def apply_packing_net(po, net_m, wh_lbl):
+    """v7.3: ao receber packing, o rolo em trânsito (quantidade encomendada) é substituído
+    pela quantidade LÍQUIDA entregue/faturada. Devolve (faturado_m, líquido_m) ou None."""
+    tr = query_to_df("SELECT token, metres FROM fabric_rolls WHERE notes = ?", (f'{TRANSIT_NOTE}{po}',))
+    if tr.empty:
+        return None
+    tr_tok, tr_m = tr.iloc[0]['token'], float(tr.iloc[0]['metres'])
+    execute_sql("DELETE FROM fabric_rolls WHERE token = ?", (tr_tok,))
+    log_movement('PACK-ADJ', tr_tok, None, wh_lbl, None, round(net_m - tr_m, 2), po,
+                 f'Faturado {tr_m:.1f}m → líquido packing {net_m:.1f}m (Δ {net_m - tr_m:+.1f}m) — rolo em trânsito substituído')
+    return tr_m, net_m
 
 def get_lead_times():
     df = query_to_df("SELECT stage, days FROM planning_params")
@@ -3504,7 +3594,7 @@ def packing_section():
         return
     # v4.2: ligação opcional a uma encomenda de tecido em aberto — a chegada fica marcada
     # automaticamente no fim da importação (sem precisar de "Marcar Chegada" no menu A Chegar)
-    open_pos = query_to_df("SELECT po_number, supplier, ref_code, total_metres FROM incoming_fabric WHERE status IN ('EXPECTED','IN_TRANSIT') ORDER BY expected_date")
+    open_pos = query_to_df("SELECT po_number, supplier, ref_code, total_metres FROM incoming_fabric WHERE status IN ('EXPECTED','IN_TRANSIT','INVOICED') ORDER BY expected_date")
     link_po = None
     if not open_pos.empty:
         link_opts = [t('pk_linkpo_none')] + open_pos['po_number'].tolist()
@@ -3565,19 +3655,30 @@ def packing_section():
                 rows_insert.append((tok, ref, r['metres'], r['lot'], r['color'], r['dest'],
                                     'AVAILABLE', None, now, now, notes))
         execute_many("INSERT INTO fabric_rolls VALUES (?,?,?,?,?,?,?,?,?,?,?)", rows_insert)
-        received = []
+        received, net_adj = [], []
+        net_by_po = {}
+        for r in ok_rows:
+            if r['po_number']:
+                net_by_po[r['po_number']] = net_by_po.get(r['po_number'], 0.0) + float(r['metres'])
         for po in sorted({r['po_number'] for r in ok_rows if r['po_number']}):
             st_q = query_to_df("SELECT status FROM incoming_fabric WHERE po_number = ?", (po,))
-            if not st_q.empty and st_q.iloc[0]['status'] in ('EXPECTED', 'IN_TRANSIT'):
+            if not st_q.empty and st_q.iloc[0]['status'] in ('EXPECTED', 'IN_TRANSIT', 'INVOICED'):
                 execute_sql("UPDATE incoming_fabric SET status = 'RECEIVED' WHERE po_number = ?", (po,))
                 log_movement('ARRIVAL', None, 'Fornecedor', wh_lbl, None, None, None,
                              f'PO tecido {po} recebida via packing list')
                 received.append(po)
+            # v7.3: rolo em trânsito (faturado na quantidade encomendada) é substituído
+            # pela quantidade LÍQUIDA entregue/faturada do packing
+            adj = apply_packing_net(po, net_by_po.get(po, 0.0), wh_lbl)
+            if adj:
+                net_adj.append(f"{po} {adj[0]:,.0f}→{adj[1]:,.0f}m")
         log_movement('RECEIPT', None, 'Fornecedor', wh_lbl, None, round(tot_m, 1), None,
                      f'Packing list: {len(ok_rows)} rolos ({tot_m:,.1f}m) em {wh_lbl}')
         msg = t('ok_pk', n=len(ok_rows), wh=wh_lbl, m=f"{tot_m:,.0f}")
         if received:
             msg += ' ' + t('pk_mark', pos=', '.join(received))
+        if net_adj:
+            msg += ' · ' + t('pk_net_done') + ' ' + ', '.join(net_adj[:5])
         flash('success', msg)
         st.rerun()
 
@@ -3954,6 +4055,8 @@ def render_incoming():
                 final_color = ni_color_new.strip() if ni_color == t('f_new_opt') else ('' if ni_color == '—' else ni_color)
             if not ni_po.strip() or not final_sup or not final_ref or ni_m <= 0:
                 st.error(t('err_required'))
+            elif not final_color:
+                st.error(t('err_inc_color'))
             elif not query_to_df("SELECT 1 FROM incoming_fabric WHERE po_number = ?", (ni_po.strip(),)).empty:
                 st.error(t('err_po_dup'))
             else:
@@ -3975,16 +4078,87 @@ def render_incoming():
         upload_section('fabric')
 
     incoming_df = query_to_df("""
-        SELECT i.supplier, i.ref_code, fr.description, i.color, i.total_metres, i.expected_date, i.status, i.destination, i.po_number
+        SELECT i.po_number, i.supplier, i.ref_code, fr.description, i.color, i.total_metres,
+               i.expected_date, i.date_invoiced, i.status, i.destination
         FROM incoming_fabric i LEFT JOIN fabric_refs fr ON i.ref_code = fr.ref_code
-        WHERE i.status IN ('EXPECTED', 'IN_TRANSIT') ORDER BY i.expected_date
+        WHERE i.status IN ('EXPECTED', 'IN_TRANSIT', 'INVOICED') ORDER BY i.expected_date
     """)
 
     if not incoming_df.empty:
-        incoming_df['color'] = incoming_df['color'].apply(lambda c: (color_dot(c) + ' ' + c) if pd.notna(c) and c else '')
-        clean = safe_display_df(add_total_row(incoming_df))
-        clean.columns = [t('c_supplier'), t('c_ref'), t('c_desc'), t('c_color'), t('c_metres'), t('c_date_exp'), t('c_status'), t('c_dest'), t('c_po2')]
-        render_table(clean, height=400)
+        # v7.3: grelha editável — cor específica + data de faturação. Ao gravar, POs
+        # faturadas entram logo em stock (quantidade encomendada, sinalizada 'Em trânsito').
+        st.markdown(f'<div class="section-subtitle">{t("i_grid_sub")}</div>', unsafe_allow_html=True)
+        open_m = float(incoming_df['total_metres'].sum())
+        tr_m = float(incoming_df[incoming_df['status'] == 'INVOICED']['total_metres'].sum())
+        st.caption(t('i_totals', n=len(incoming_df), m=f"{open_m:,.0f}", t=f"{tr_m:,.0f}"))
+        edited_inc = st.data_editor(
+            incoming_df, key='inc_grid', hide_index=True, use_container_width=True,
+            disabled=['po_number', 'supplier', 'ref_code', 'description', 'total_metres',
+                      'expected_date', 'status', 'destination'],
+            column_config={
+                'po_number': st.column_config.TextColumn(t('c_po2')),
+                'supplier': st.column_config.TextColumn(t('c_supplier')),
+                'ref_code': st.column_config.TextColumn(t('c_ref')),
+                'description': st.column_config.TextColumn(t('c_desc')),
+                'color': st.column_config.TextColumn(t('c_color')),
+                'total_metres': st.column_config.NumberColumn(t('c_metres'), format='%.1f'),
+                'expected_date': st.column_config.TextColumn(t('c_date_exp')),
+                'date_invoiced': st.column_config.TextColumn(t('inv_date')),
+                'status': st.column_config.TextColumn(t('c_status')),
+                'destination': st.column_config.TextColumn(t('c_dest')),
+            })
+        if st.button(t('b_inc_save'), key='inc_save'):
+            prev = {str(r['po_number']): (str(r['color']).strip() if pd.notna(r['color']) else '',
+                                          str(r['date_invoiced']).strip()[:10] if pd.notna(r['date_invoiced']) else '',
+                                          r['status']) for _, r in incoming_df.iterrows()}
+            bad_d, n_c, launched, reverted, blocked = [], 0, [], [], []
+            for _, r in edited_inc.iterrows():
+                po = str(r['po_number'])
+                if po not in prev:
+                    continue
+                pc, pdiv, pst = prev[po]
+                nc = str(r['color']).strip() if pd.notna(r['color']) else ''
+                nd = str(r['date_invoiced']).strip()[:10] if pd.notna(r['date_invoiced']) else ''
+                if nd:
+                    try:
+                        date.fromisoformat(nd)
+                    except ValueError:
+                        bad_d.append((po, nd))
+                        continue
+                if nc != pc:
+                    execute_sql("UPDATE incoming_fabric SET color = ? WHERE po_number = ?", (nc or None, po))
+                    n_c += 1
+                if nd != pdiv:
+                    execute_sql("UPDATE incoming_fabric SET date_invoiced = ? WHERE po_number = ?", (nd or None, po))
+                    if nd and pst in ('EXPECTED', 'IN_TRANSIT'):
+                        execute_sql("UPDATE incoming_fabric SET status = 'INVOICED' WHERE po_number = ?", (po,))
+                        res = launch_transit_roll(po, nd)
+                        launched.append(f"{po}" + (f" ({res[0]} · {res[1]:,.0f}m)" if res else ""))
+                    elif not nd and pst == 'INVOICED':
+                        rv = revert_transit_roll(po)
+                        if rv == 'ok':
+                            execute_sql("UPDATE incoming_fabric SET status = 'IN_TRANSIT' WHERE po_number = ?", (po,))
+                            reverted.append(po)
+                        elif rv == 'blocked':
+                            blocked.append(po)
+            if bad_d:
+                st.error(t('inv_bad_date') + ': ' + ', '.join(f"{p} ({d})" for p, d in bad_d[:5]))
+            msgs = []
+            if n_c:
+                msgs.append(t('ok_inc_colors', n=n_c))
+            if launched:
+                msgs.append(t('ok_transit', n=len(launched)) + ': ' + ', '.join(launched[:6]))
+            if reverted:
+                msgs.append(t('ok_transit_rev', n=len(reverted)) + ': ' + ', '.join(reverted[:6]))
+            if msgs:
+                log_movement('EDIT', None, None, None, None, None, None,
+                             f'Encomendas tecido: {n_c} cores · {len(launched)} faturadas→stock · {len(reverted)} revertidas')
+                flash('success', ' · '.join(msgs))
+                if blocked:
+                    flash('warning', t('warn_transit_rev') + ': ' + ', '.join(blocked[:5]))
+                st.rerun()
+            elif blocked:
+                st.warning(t('warn_transit_rev') + ': ' + ', '.join(blocked[:5]))
 
         # Marcar como recebido — v7: receção unificada (chegada + rolo consolidado num clique)
         st.markdown(f'<div class="section-title">{t("i_mark")}</div>', unsafe_allow_html=True)
@@ -3997,9 +4171,22 @@ def render_incoming():
             if st.button(t('b_arrived'), key="incoming_arrived"):
                 execute_sql("UPDATE incoming_fabric SET status = 'RECEIVED' WHERE po_number = ?", (po_sel,))
                 po_row = incoming_df[incoming_df['po_number'] == po_sel].iloc[0]
+                ref = po_row['ref_code'] if pd.notna(po_row['ref_code']) else None
+                tr = query_to_df("SELECT token, metres, warehouse FROM fabric_rolls WHERE notes = ?",
+                                 (f'{TRANSIT_NOTE}{po_sel}',))
+                if not tr.empty:
+                    # v7.3: rolo em trânsito (faturado) → confirmado como stock físico
+                    tr_tok, tr_m, tr_wh = tr.iloc[0]['token'], float(tr.iloc[0]['metres']), tr.iloc[0]['warehouse']
+                    now = datetime.now().isoformat()
+                    execute_sql("UPDATE fabric_rolls SET notes = ?, date_received = ?, date_last_move = ? WHERE token = ?",
+                                (f'Recebido — PO {po_sel} (receção unificada)', now, now, tr_tok))
+                    log_movement('ARRIVAL', tr_tok, 'Fornecedor', tr_wh, ref, tr_m, po_sel,
+                                 f'PO tecido {po_sel} chegou — rolo em trânsito confirmado em stock',
+                                 po_row['color'] if pd.notna(po_row['color']) and po_row['color'] else None)
+                    flash('success', t('ok_arrived_transit', po=po_sel, tok=tr_tok, m=f"{tr_m:,.0f}"))
+                    st.rerun()
                 has_rolls = query_to_df("SELECT COUNT(*) c FROM fabric_rolls WHERE notes LIKE ?",
                                         (f'%PO {po_sel}%',)).iloc[0]['c']
-                ref = po_row['ref_code'] if pd.notna(po_row['ref_code']) else None
                 if has_rolls or not ref:
                     # rolos já registados via packing (ou PO sem ref) — só marca a chegada
                     log_movement('ARRIVAL', None, 'Fornecedor', 'XBS', None, None, None,
@@ -4025,13 +4212,14 @@ def render_incoming():
         st.markdown(f'<div class="section-title">{t("i_cal")}</div>', unsafe_allow_html=True)
         st.markdown('<div class="timeline">', unsafe_allow_html=True)
         for _, row in incoming_df.head(10).iterrows():
-            status_class = "completed" if row['status'] == 'IN_TRANSIT' else "pending"
+            status_class = "completed" if row['status'] in ('IN_TRANSIT', 'INVOICED') else "pending"
             dest = row['destination'] if pd.notna(row['destination']) and row['destination'] else '—'
+            inv_txt = f" | 🧾 {str(row['date_invoiced'])[:10]}" if pd.notna(row['date_invoiced']) and row['date_invoiced'] else ''
             st.markdown(f"""
             <div class="timeline-item {status_class}">
                 <div class="timeline-date">{row['expected_date']}</div>
                 <div class="timeline-text">{row['po_number']} — {row['supplier']} {row['ref_code']} {row['total_metres']:,.0f}m</div>
-                <div class="timeline-meta">{row['status']} | {t('c_dest')}: {dest}</div>
+                <div class="timeline-meta">{row['status']} | {t('c_dest')}: {dest}{inv_txt}</div>
             </div>
             """, unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
@@ -4290,7 +4478,7 @@ def render_production():
                     tem_cor = rj_cor and not pd.isna(rj_cor) and str(rj_cor).strip()
                     if not tem_cor:
                         st.caption(t('rj_nocolor'))
-                    q_rj = "SELECT token, color, metres, warehouse, lot, date_received FROM fabric_rolls WHERE ref_code = ? AND status = 'AVAILABLE'"
+                    q_rj = f"SELECT token, color, metres, warehouse, lot, date_received FROM fabric_rolls WHERE ref_code = ? AND status = 'AVAILABLE' {TRANSIT_FILTER}"
                     p_rj = [rj_ref]
                     if tem_cor:
                         q_rj += " AND color = ?"
@@ -4893,13 +5081,13 @@ def render_movement():
         st.markdown(f'<div class="section-subtitle">{t("m1_sub")}</div>', unsafe_allow_html=True)
         c1, c2 = st.columns(2)
         with c1:
-            ref_opts = query_to_df("SELECT DISTINCT ref_code FROM fabric_rolls WHERE status = 'AVAILABLE' AND token LIKE 'R-%' ORDER BY ref_code")['ref_code'].tolist()
+            ref_opts = query_to_df(f"SELECT DISTINCT ref_code FROM fabric_rolls WHERE status = 'AVAILABLE' AND token LIKE 'R-%' {TRANSIT_FILTER} ORDER BY ref_code")['ref_code'].tolist()
             m1_ref = st.selectbox(t('f_ref'), ref_opts, key="m1_ref")
         with c2:
-            wh_opts = query_to_df("SELECT DISTINCT warehouse FROM fabric_rolls WHERE ref_code = ? AND status = 'AVAILABLE' AND token LIKE 'R-%'", (m1_ref,))['warehouse'].tolist()
+            wh_opts = query_to_df(f"SELECT DISTINCT warehouse FROM fabric_rolls WHERE ref_code = ? AND status = 'AVAILABLE' AND token LIKE 'R-%' {TRANSIT_FILTER}", (m1_ref,))['warehouse'].tolist()
             m1_wh = st.selectbox(t('m1_wh'), wh_opts, key="m1_wh")
 
-        rolls_avail = query_to_df("SELECT token, metres, color, lot FROM fabric_rolls WHERE ref_code = ? AND warehouse = ? AND status = 'AVAILABLE' AND token LIKE 'R-%' ORDER BY token", (m1_ref, m1_wh))
+        rolls_avail = query_to_df(f"SELECT token, metres, color, lot FROM fabric_rolls WHERE ref_code = ? AND warehouse = ? AND status = 'AVAILABLE' AND token LIKE 'R-%' {TRANSIT_FILTER} ORDER BY token", (m1_ref, m1_wh))
         if rolls_avail.empty:
             st.info(t('m1_none'))
         else:
@@ -5037,11 +5225,11 @@ def render_movement():
         st.markdown(f'<div class="section-subtitle">{t("m3_sub")}</div>', unsafe_allow_html=True)
         c1, c2 = st.columns(2)
         with c1:
-            m3_ref = st.selectbox(t('f_ref'), query_to_df("SELECT DISTINCT ref_code FROM fabric_rolls WHERE status = 'AVAILABLE' AND token LIKE 'R-%' ORDER BY ref_code")['ref_code'].tolist(), key="m3_ref")
+            m3_ref = st.selectbox(t('f_ref'), query_to_df(f"SELECT DISTINCT ref_code FROM fabric_rolls WHERE status = 'AVAILABLE' AND token LIKE 'R-%' {TRANSIT_FILTER} ORDER BY ref_code")['ref_code'].tolist(), key="m3_ref")
         with c2:
-            m3_wh = st.selectbox(t('m1_wh'), query_to_df("SELECT DISTINCT warehouse FROM fabric_rolls WHERE ref_code = ? AND status = 'AVAILABLE' AND token LIKE 'R-%'", (m3_ref,))['warehouse'].tolist(), key="m3_wh")
+            m3_wh = st.selectbox(t('m1_wh'), query_to_df(f"SELECT DISTINCT warehouse FROM fabric_rolls WHERE ref_code = ? AND status = 'AVAILABLE' AND token LIKE 'R-%' {TRANSIT_FILTER}", (m3_ref,))['warehouse'].tolist(), key="m3_wh")
 
-        avail = query_to_df("SELECT COALESCE(SUM(metres),0) as m FROM fabric_rolls WHERE ref_code = ? AND warehouse = ? AND status = 'AVAILABLE' AND token LIKE 'R-%'", (m3_ref, m3_wh)).iloc[0]['m']
+        avail = query_to_df(f"SELECT COALESCE(SUM(metres),0) as m FROM fabric_rolls WHERE ref_code = ? AND warehouse = ? AND status = 'AVAILABLE' AND token LIKE 'R-%' {TRANSIT_FILTER}", (m3_ref, m3_wh)).iloc[0]['m']
         st.markdown(f'<div class="section-subtitle">{t("m3_avail", wh=m3_wh, m=f"{avail:,.1f}")}</div>', unsafe_allow_html=True)
 
         c1, c2 = st.columns(2)
@@ -5082,7 +5270,7 @@ def render_movement():
                              datetime.now().isoformat(), datetime.now().isoformat(), f'Consolidado de {m3_wh}'))
                 # Retira FIFO dos rolos de origem
                 remaining = m3_metres
-                src = query_to_df("SELECT token, metres FROM fabric_rolls WHERE ref_code = ? AND warehouse = ? AND status = 'AVAILABLE' AND token LIKE 'R-%' ORDER BY date_received, token", (m3_ref, m3_wh))
+                src = query_to_df(f"SELECT token, metres FROM fabric_rolls WHERE ref_code = ? AND warehouse = ? AND status = 'AVAILABLE' AND token LIKE 'R-%' {TRANSIT_FILTER} ORDER BY date_received, token", (m3_ref, m3_wh))
                 for _, r in src.iterrows():
                     if remaining <= 0:
                         break

@@ -1,3 +1,17 @@
+## v7.3 — Tecido a chegar: cor específica · faturação → stock em trânsito · packing = quantidade líquida
+
+> Nova cadeia do tecido: **encomenda (com cor) → faturada pelo fornecedor (entra em stock na quantidade encomendada) → packing list (ajusta para a quantidade líquida entregue/faturada) → receção.**
+
+| Pedido | Implementação |
+|---|---|
+| **Alocar cor específica ao tecido a chegar** | A cor passa a ser **obrigatória** no formulário de nova encomenda. A tabela de encomendas em aberto é agora uma **grelha editável** (cor + data de faturação) — as encomendas antigas sem cor completam-se diretamente na grelha |
+| **Data de faturação da PO de tecido** | Nova coluna `date_invoiced` (migração idempotente), editável na grelha com validação AAAA-MM-DD, visível também na timeline |
+| **Faturada → entra em stock a quantidade encomendada** | Ao gravar a data de faturação, a encomenda passa a **INVOICED** e é criado automaticamente um **rolo consolidado em stock** (ref + cor + metros encomendados, no destino) sinalizado **"Em trânsito"**. Conta como stock (posição, armazéns, planeamento) mas **não é consumível** — fica excluído do corte (token v7.2), do Movimentar (M1/M3) e da Regularização até chegar. **Limpar a data reverte** (rolo removido) enquanto estiver intacto; se já foi movido/consumido, avisa para regularizar |
+| **Packing → quantidade líquida** | A importação de packing passa a aceitar POs **INVOICED** e, ao receber, **substitui o rolo em trânsito pela quantidade líquida** dos rolos do packing — o Δ (encomendado vs líquido) fica registado como movimento **PACK-ADJ** e no aviso de confirmação. Sem packing, **"Marcar chegada"** confirma o rolo em trânsito como stock físico (perde a sinalização e passa a consumível) |
+| **Coerência do resto do sistema** | "A chegar" (posição/planeamento) deixa de contar POs faturadas (já estão em stock — sem duplicação); alertas de **tecido em atraso** passam a incluir faturadas em trânsito não recebidas |
+
+---
+
 ## v7.2 — Cadeia de vida do rolo fechada: token sempre atribuído (corte → em processo → faturado)
 
 > Regra de negócio (confirmada): **ao locar corte, os rolos passam de stock para em processo; ao faturar, saem de em processo; o token da PO tem de estar atribuído quer seja metragem agrupada, quer rolos individuais.** A auditoria v7.1 mostrou que a cadeia estava partida em dois pontos — esta versão fecha-a.
