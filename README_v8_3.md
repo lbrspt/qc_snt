@@ -1,3 +1,26 @@
+## v8.3 — Reset & Recarga sem "memória" · upload de tecido é snapshot do ficheiro
+
+| Problema | Correção |
+|---|---|
+| **"O sistema parece ter memória" — após reset + recarga, o tecido a chegar mostrava os dados do ficheiro antigo** | Três fontes de "memória" fechadas: **(1)** o reset passa a limpar também a sessão de uploads — as marcas "ficheiro já carregado" e os ficheiros retidos nos uploaders desaparecem, tudo fresco no mesmo separador, sem F5; **(2)** após cada carga bem-sucedida o ficheiro é largado do uploader — deixa de ser possível re-carregar o ficheiro velho por engano (era a origem mais provável: o uploader guardava o ficheiro anterior entre ações); **(3)** o upload de tecido passa a ser **snapshot exato do ficheiro** — linhas em aberto (EXPECTED) que já não venham no ficheiro são **apagadas**, quantidades alteradas são atualizadas. A tabela fica **exatamente** como o ficheiro carregado |
+| **Re-upload podia fazer regredir uma PO já faturada/em trânsito para EXPECTED** | UPSERT condicional: só linhas EXPECTED são atualizadas. Faturadas, em trânsito e recebidas **nunca são tocadas** pelo upload (mantêm destino, fatura e estado) |
+| **Sem forma de limpar só o tecido a chegar** | Novo botão **🧹 Limpar encomendas de tecido em aberto (EXPECTED)** na secção b) do Reset & Recarga — limpa só o tecido a chegar sem reset completo |
+| **Pouca visibilidade do que foi carregado** | A mensagem de sucesso do upload de tecido indica agora **nome do ficheiro, linhas, POs, metros e linhas removidas**; a pré-visualização também mostra o nome e os totais do ficheiro — vês sempre o que está a entrar |
+
+**Como aplicar:** copiar `app.py` → commit → Railway. **Sem re-seed** — o nome da BD não muda e as migrações são idempotentes.
+
+---
+
+## v8.2 — Movimentar funciona com os lotes agregados (tokens AGG-)
+
+| Problema | Correção |
+|---|---|
+| **Após a importação de stock, M1/M2/M3 sem opções ("No options to select")** | Os três caminhos do ⚙️ Movimentar filtravam por prefixo de token da era pré-v8: M1 Rolos Conhecidos e M3 Metros Consolidados só viam `R-` (receções manuais), M2 Lote Agregado só via `P-` (divisões). Os lotes do upload v8 (`AGG-####`) ficavam fora de todos. **M1 e M3 passam a aceitar qualquer token** AVAILABLE; **M2 aceita `P-` e `AGG-`** (incluindo os em processo — é por aqui que devolves excedente a stock). O corte (Passo B) e o Regularizar já não filtravam por prefixo. Testado: 23 refs AVAILABLE, 94 lotes em M2 (29 em processo), FIFO M3 sobre lotes AGG com conservação total 84.764,9m |
+
+**Nota — Lote Agregado vs Metros Consolidados:** com o novo stock sobrepõem-se bastante, mas não são iguais: **M2** move/divide **um lote específico** (e é o único que mostra lotes **em processo**, para devolver a stock); **M3** move **X metros em FIFO** de uma ref+armazém (pode tirar de vários rolos) e cria um lote novo no destino. Para o stock agregado atual, M3 acaba quase sempre por dividir o mesmo lote AGG — mas continua a ser o caminho rápido "metros → destino".
+
+---
+
 ## v8.1 — POs em curso: corte consome SEMPRE o em processo primeiro (armazém partilhado)
 
 | Situação | Correção |

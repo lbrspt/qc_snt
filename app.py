@@ -1,5 +1,15 @@
 """
-SNT APS Portugal - Stock & Produção v8.2
+SNT APS Portugal - Stock & Produção v8.3
+v8.3 (SEM "MEMÓRIA" NO RESET & RECARGA — snapshot de encomendas de tecido):
+- O reset apaga agora também a sessão de uploads (marcas "já carregado" e ficheiros
+  retidos nos uploaders): depois do RESET tudo fica fresco no mesmo separador, sem F5
+- Após cada carga bem-sucedida, o ficheiro é largado do uploader — nunca mais é
+  usado por engano num carregamento seguinte (era a origem da "memória" reportada)
+- Upload de tecido a chegar passa a ser SNAPSHOT do ficheiro: linhas EXPECTED
+  ausentes no ficheiro são apagadas (faturadas/em trânsito/recebidas nunca são
+  tocadas). A mensagem de sucesso indica ficheiro, linhas, POs, metros e removidas
+- Novo botão "Limpar encomendas de tecido em aberto (EXPECTED)" na secção b) —
+  limpa só o tecido a chegar sem reset completo
 v8.2 (MOVIMENTAR COM LOTES AGGREGADOS AGG-):
 - M1 Rolos Conhecidos e M3 Metros Consolidados filtravam token LIKE 'R-%' e M2 Lote
   Agregado LIKE 'P-%' — os lotes agregados do upload v8 (tokens AGG-####) ficavam
@@ -1173,7 +1183,9 @@ T = {
  'rs_file_err': 'Não consegui ler o ficheiro: {e}',
  'rs_nothing': 'Nenhum registo válido encontrado.',
  'ok_up_stock': '📦 Stock carregado: {n} lotes agregados ({m}m) — {a}m disponível · {p}m em processo. Refs novas no catálogo: {r}',
- 'ok_up_fab': '🚢 Tecido a chegar carregado: {n} linhas em {p} POs. Refs novas no catálogo: {r}',
+ 'ok_up_fab': '🚢 {f}: {n} linhas em {p} POs ({m}m) carregadas. Removidas por ausência no ficheiro: {x}. Refs novas no catálogo: {r}',
+ 'rs_clear_fab_btn': '🧹 Limpar encomendas de tecido em aberto (EXPECTED)',
+ 'rs_up_fab_cleared': '🧹 Encomendas de tecido em aberto removidas: {n}. Faturadas/em trânsito não são tocadas.',
  'ok_up_garm': '👕 POs garment carregadas: {n} — completa a ref de tecido na tabela de Produção.',
  'ok_up_hist': '📊 Histórico carregado: {c} consumos ({d} duplicados ignorados), {p} POs antigas criadas (INVOICED), {u} POs atualizadas com ref/cor. Real médio do mapa recalculado.',
  'rs_mould_warn': '⚠️ {n} modelos do histórico sem molde base no mapa — aloca o molde em 📊 Consumos para recalcular valores futuros:',
@@ -1538,7 +1550,9 @@ T = {
  'rs_file_err': 'Could not read the file: {e}',
  'rs_nothing': 'No valid records found.',
  'ok_up_stock': '📦 Stock loaded: {n} aggregate lots ({m}m) — {a}m available · {p}m in process. New refs in catalogue: {r}',
- 'ok_up_fab': '🚢 Incoming fabric loaded: {n} lines across {p} POs. New refs in catalogue: {r}',
+ 'ok_up_fab': '🚢 {f}: {n} lines across {p} POs ({m}m) loaded. Removed (absent from file): {x}. New refs in catalogue: {r}',
+ 'rs_clear_fab_btn': '🧹 Clear open fabric orders (EXPECTED)',
+ 'rs_up_fab_cleared': '🧹 Open fabric orders removed: {n}. Invoiced/in-transit orders are untouched.',
  'ok_up_garm': '👕 Garment POs loaded: {n} — complete the fabric ref in the Production table.',
  'ok_up_hist': '📊 History loaded: {c} consumptions ({d} duplicates skipped), {p} old POs created (INVOICED), {u} POs updated with ref/colour. Map actuals recalculated.',
  'rs_mould_warn': '⚠️ {n} history models without a base mould in the map — allocate the mould in 📊 Consumption to recalculate future values:',
@@ -6395,22 +6409,48 @@ def apply_stock_upload(rows, sheet):
     return len(rows), new_refs
 
 def apply_fabric_po_upload(rows):
-    """Encomendas de tecido → incoming_fabric (EXPECTED, destino atribuído depois na grelha)."""
+    """Encomendas de tecido → incoming_fabric (EXPECTED, destino atribuído depois na grelha).
+    v8.3: semântica de SNAPSHOT — linhas EXPECTED ausentes do ficheiro são apagadas,
+    para que a tabela fique exatamente como o ficheiro carregado (sem "memória").
+    Faturadas/em trânsito/recebidas nunca são tocadas (têm implicações de stock)."""
     existing = set(query_to_df("SELECT ref_code FROM fabric_refs")['ref_code'])
     new_refs = _ensure_refs(sorted({(r['ref'], r['memo']) for r in rows if r['ref'] not in existing}))
     now = datetime.now().isoformat()
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     for r in rows:
-        cur.execute("""INSERT OR REPLACE INTO incoming_fabric
+        # v8.3: UPSERT condicional — só linhas EXPECTED são atualizadas; faturadas/
+        # em trânsito/recebidas mantêm destino, fatura e estado mesmo que a PO volte no ficheiro
+        cur.execute("""INSERT INTO incoming_fabric
                        (po_number, supplier, ref_code, total_metres, expected_date, status,
                         tracking_ref, date_created, color, destination, date_invoiced)
-                       VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                       ON CONFLICT(po_number) DO UPDATE SET
+                         supplier=excluded.supplier, ref_code=excluded.ref_code,
+                         total_metres=excluded.total_metres, expected_date=excluded.expected_date,
+                         date_created=excluded.date_created, color=excluded.color
+                       WHERE incoming_fabric.status = 'EXPECTED'""",
                     (r['po_key'], r['supplier'], r['ref'], r['metres'], r['expected'], 'EXPECTED',
                      None, r['created'] or now, r['color'], None, None))
+    keys = [r['po_key'] for r in rows]
+    removed = 0
+    if keys:
+        ph = ','.join('?' * len(keys))
+        cur.execute(f"DELETE FROM incoming_fabric WHERE status = 'EXPECTED' AND po_number NOT IN ({ph})", keys)
+        removed = cur.rowcount
     conn.commit()
     conn.close()
-    return new_refs
+    return new_refs, removed
+
+def clear_expected_fabric_orders():
+    """v8.3: limpa APENAS encomendas de tecido em aberto (EXPECTED)."""
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("DELETE FROM incoming_fabric WHERE status = 'EXPECTED'")
+    n = cur.rowcount
+    conn.commit()
+    conn.close()
+    return n
 
 def apply_garment_po_upload(rows):
     """POs garment finais → production (PENDING, fabric_ref NULL — completar na tabela)."""
@@ -6524,6 +6564,12 @@ def render_reset_reload():
     if st.button(t('rs_wipe_btn'), key='rs_wipe'):
         if _conf.strip() == 'RESET':
             counts = apply_reset_data()
+            # v8.3: o reset também limpa a "memória" da sessão (marcas de ficheiros já
+            # carregados + ficheiros retidos nos uploaders) — fica tudo fresco no mesmo separador
+            for _k in [k for k in list(st.session_state.keys())
+                       if k.startswith('_rs_done_') or k in ('rs_f_stock', 'rs_f_fab', 'rs_f_garm',
+                                                             'rs_f_hist', '_rs_warn_models')]:
+                del st.session_state[_k]
             flash('success', t('ok_wipe', r=counts['fabric_rolls'], i=counts['incoming_fabric'],
                                p=counts['production'], c=counts['consumptions'], m=counts['movements']))
             st.rerun()
@@ -6557,6 +6603,7 @@ def render_reset_reload():
                     elif st.button(f"{t('rs_load')} ({len(rows)})", key='rs_b_stock'):
                         n, new_refs = apply_stock_upload(rows, sheet)
                         _mark_done('stock', f)
+                        st.session_state.pop('rs_f_stock', None)  # v8.3: larga o ficheiro retido
                         flash('success', t('ok_up_stock', n=n, m=f"{tot:,.1f}", a=f"{av:,.1f}",
                                            p=f"{tot - av:,.1f}", r=len(new_refs)))
                         st.rerun()
@@ -6566,6 +6613,12 @@ def render_reset_reload():
     # b) tecido a chegar
     with st.expander(t('rs_up_fab')):
         st.caption(t('rs_up_fab_d'))
+        if st.button(t('rs_clear_fab_btn'), key='rs_clear_fab'):
+            n = clear_expected_fabric_orders()
+            st.session_state.pop('rs_f_fab', None)
+            st.session_state.pop('_rs_done_fab', None)
+            flash('info', t('rs_up_fab_cleared', n=n))
+            st.rerun()
         f = st.file_uploader('fabpo', type=['xlsx', 'xls'], key='rs_f_fab', label_visibility='collapsed')
         if f is not None:
             try:
@@ -6573,14 +6626,19 @@ def render_reset_reload():
                 if not rows:
                     st.warning(t('rs_nothing'))
                 else:
+                    st.caption(f"📄 {f.name} — {len(rows)} linhas · {n_pos} POs · {sum(r['metres'] for r in rows):,.1f}m")
                     st.dataframe(pd.DataFrame(rows)[['po_key', 'supplier', 'ref', 'color', 'metres', 'expected']].head(25),
                                  use_container_width=True, hide_index=True)
                     if _already('fab', f):
                         st.caption(t('rs_loaded'))
                     elif st.button(f"{t('rs_load')} ({len(rows)})", key='rs_b_fab'):
-                        new_refs = apply_fabric_po_upload(rows)
+                        # v8.3: snapshot — apaga EXPECTED ausentes do ficheiro
+                        new_refs, removed = apply_fabric_po_upload(rows)
                         _mark_done('fab', f)
-                        flash('success', t('ok_up_fab', n=len(rows), p=n_pos, r=len(new_refs)))
+                        st.session_state.pop('rs_f_fab', None)  # v8.3: larga o ficheiro retido
+                        flash('success', t('ok_up_fab', f=f.name, n=len(rows), p=n_pos,
+                                           m=f"{sum(r['metres'] for r in rows):,.1f}",
+                                           x=removed, r=len(new_refs)))
                         st.rerun()
             except Exception as e:
                 st.error(t('rs_file_err', e=e))
@@ -6601,6 +6659,7 @@ def render_reset_reload():
                     elif st.button(f"{t('rs_load')} ({len(rows)})", key='rs_b_garm'):
                         n = apply_garment_po_upload(rows)
                         _mark_done('garm', f)
+                        st.session_state.pop('rs_f_garm', None)  # v8.3: larga o ficheiro retido
                         flash('success', t('ok_up_garm', n=n))
                         st.rerun()
             except Exception as e:
@@ -6626,6 +6685,7 @@ def render_reset_reload():
                         ins_c, cre_p, upd_p, warn = apply_history_upload(rows)
                         _mark_done('hist', f)
                         st.session_state['_rs_warn_models'] = warn
+                        st.session_state.pop('rs_f_hist', None)  # v8.3: larga o ficheiro retido
                         flash('success', t('ok_up_hist', c=ins_c, d=dupes, p=cre_p, u=upd_p))
                         st.rerun()
             except Exception as e:
