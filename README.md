@@ -1,3 +1,13 @@
+## v8.4 — Descrições (Memo Main) sincronizadas no upload de tecido
+
+| Problema | Correção |
+|---|---|
+| **Ficheiro novo carregado, mas o Memo (Main) continuava "antigo" na grelha** | Causa raiz: a coluna **Descrição** da grelha A Chegar vem do **catálogo** (`fabric_refs`, via JOIN) — que o reset **preserva por design** — e o upload só inseria descrições para refs **novas**; as existentes nunca eram atualizadas. O Item Number ficava bem porque vive na própria linha da encomenda. O upload de tecido passa a fazer **UPDATE da descrição** de todas as refs presentes no ficheiro sempre que o Memo (Main) diferir; quando a mesma ref tem memos diferentes em várias POs, **ganha o da PO mais recente** (Creation Date). Memos vazios nunca apagam a descrição existente. A mensagem de sucesso indica quantas descrições foram atualizadas |
+
+**Nota:** não precisas de reset para isto fazer efeito — basta voltar a carregar o ficheiro de encomendas de tecido atual e as descrições do catálogo ficam sincronizadas com os memos desse ficheiro.
+
+---
+
 ## v8.3 — Reset & Recarga sem "memória" · upload de tecido é snapshot do ficheiro
 
 | Problema | Correção |

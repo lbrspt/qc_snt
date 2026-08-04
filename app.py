@@ -1,5 +1,12 @@
 """
-SNT APS Portugal - Stock & Produção v8.3
+SNT APS Portugal - Stock & Produção v8.4
+v8.4 (DESCRIÇÕES/MEMO SINCRONIZADAS NO UPLOAD DE TECIDO):
+- A grelha A Chegar mostra a Descrição do catálogo fabric_refs (JOIN), que sobrevive
+  ao reset por design — e o _ensure_refs só inseria refs NOVAS, nunca atualizava o
+  memo das existentes. Resultado: ficheiro novo com memos novos, grelha com memos
+  "antigos". O upload de tecido passa a fazer UPDATE da descrição das refs do
+  ficheiro sempre que o Memo (Main) diferir (último memo do ficheiro ganha);
+  a mensagem de sucesso indica quantas descrições foram atualizadas
 v8.3 (SEM "MEMÓRIA" NO RESET & RECARGA — snapshot de encomendas de tecido):
 - O reset apaga agora também a sessão de uploads (marcas "já carregado" e ficheiros
   retidos nos uploaders): depois do RESET tudo fica fresco no mesmo separador, sem F5
@@ -1183,7 +1190,7 @@ T = {
  'rs_file_err': 'Não consegui ler o ficheiro: {e}',
  'rs_nothing': 'Nenhum registo válido encontrado.',
  'ok_up_stock': '📦 Stock carregado: {n} lotes agregados ({m}m) — {a}m disponível · {p}m em processo. Refs novas no catálogo: {r}',
- 'ok_up_fab': '🚢 {f}: {n} linhas em {p} POs ({m}m) carregadas. Removidas por ausência no ficheiro: {x}. Refs novas no catálogo: {r}',
+ 'ok_up_fab': '🚢 {f}: {n} linhas em {p} POs ({m}m) carregadas. Removidas por ausência no ficheiro: {x}. Descrições (memo) atualizadas: {d}. Refs novas no catálogo: {r}',
  'rs_clear_fab_btn': '🧹 Limpar encomendas de tecido em aberto (EXPECTED)',
  'rs_up_fab_cleared': '🧹 Encomendas de tecido em aberto removidas: {n}. Faturadas/em trânsito não são tocadas.',
  'ok_up_garm': '👕 POs garment carregadas: {n} — completa a ref de tecido na tabela de Produção.',
@@ -1550,7 +1557,7 @@ T = {
  'rs_file_err': 'Could not read the file: {e}',
  'rs_nothing': 'No valid records found.',
  'ok_up_stock': '📦 Stock loaded: {n} aggregate lots ({m}m) — {a}m available · {p}m in process. New refs in catalogue: {r}',
- 'ok_up_fab': '🚢 {f}: {n} lines across {p} POs ({m}m) loaded. Removed (absent from file): {x}. New refs in catalogue: {r}',
+ 'ok_up_fab': '🚢 {f}: {n} lines across {p} POs ({m}m) loaded. Removed (absent from file): {x}. Descriptions (memo) updated: {d}. New refs in catalogue: {r}',
  'rs_clear_fab_btn': '🧹 Clear open fabric orders (EXPECTED)',
  'rs_up_fab_cleared': '🧹 Open fabric orders removed: {n}. Invoiced/in-transit orders are untouched.',
  'ok_up_garm': '👕 Garment POs loaded: {n} — complete the fabric ref in the Production table.',
@@ -6438,9 +6445,24 @@ def apply_fabric_po_upload(rows):
         ph = ','.join('?' * len(keys))
         cur.execute(f"DELETE FROM incoming_fabric WHERE status = 'EXPECTED' AND po_number NOT IN ({ph})", keys)
         removed = cur.rowcount
+    # v8.4: sincronizar descrições (Memo Main) das refs EXISTENTES — o catálogo
+    # fabric_refs sobrevive ao reset por design e o _ensure_refs só insere refs novas,
+    # por isso a grelha mostrava o memo "antigo" para sempre. Quando a mesma ref tem
+    # memos diferentes em POs do ficheiro, ganha o da PO mais recente (Creation Date).
+    desc_map = {}
+    for r in sorted(rows, key=lambda x: x['created'] or ''):
+        m = (r['memo'] or '').strip()
+        if r['ref'] and m and m.lower() not in ('nan', 'none'):
+            desc_map[r['ref']] = m
+    n_desc = 0
+    for ref, memo in desc_map.items():
+        cur.execute("""UPDATE fabric_refs SET description=?
+                       WHERE ref_code=? AND (description IS NULL OR description <> ?)""",
+                    (memo, ref, memo))
+        n_desc += cur.rowcount
     conn.commit()
     conn.close()
-    return new_refs, removed
+    return new_refs, removed, n_desc
 
 def clear_expected_fabric_orders():
     """v8.3: limpa APENAS encomendas de tecido em aberto (EXPECTED)."""
@@ -6633,12 +6655,13 @@ def render_reset_reload():
                         st.caption(t('rs_loaded'))
                     elif st.button(f"{t('rs_load')} ({len(rows)})", key='rs_b_fab'):
                         # v8.3: snapshot — apaga EXPECTED ausentes do ficheiro
-                        new_refs, removed = apply_fabric_po_upload(rows)
+                        # v8.4: devolve também descrições (memo) sincronizadas no catálogo
+                        new_refs, removed, n_desc = apply_fabric_po_upload(rows)
                         _mark_done('fab', f)
                         st.session_state.pop('rs_f_fab', None)  # v8.3: larga o ficheiro retido
                         flash('success', t('ok_up_fab', f=f.name, n=len(rows), p=n_pos,
                                            m=f"{sum(r['metres'] for r in rows):,.1f}",
-                                           x=removed, r=len(new_refs)))
+                                           x=removed, d=n_desc, r=len(new_refs)))
                         st.rerun()
             except Exception as e:
                 st.error(t('rs_file_err', e=e))
