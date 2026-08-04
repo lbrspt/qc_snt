@@ -1,3 +1,18 @@
+## v8.5 — Master data de artigos: fornecedor e descrição completos, editáveis e protegidos
+
+| Problema | Correção |
+|---|---|
+| **Refs criadas pelo upload de stock sem fornecedor nem descrição (ex.: GB14W UNI col 1/10/93)** | O upload de stock só criava a ref — nunca preenchia estes campos. Agora: o **upload de stock preenche a descrição** a partir da coluna **'Article'** do audit (só refs vazias); o **upload de POs de tecido preenche o fornecedor** a partir do nome na PO (só quando está vazio — nunca sobrescreve o seed nem edições). As mensagens de sucesso indicam quantos campos foram preenchidos |
+| **Descrições "desconectadas" (memo genérico partilhado por várias refs, ou descrição que só menciona uma das cores do artigo)** | Duas vias de curadoria, à tua escolha: **(a) upload de master data** — novo expansor **e · Catálogo de artigos** no Reset & Recarga: Excel/CSV com colunas ref + fornecedor + descrição (aceita o próprio audit, com Reference / Color + Article, ou uma exportação NetSuite); **(b) catálogo editável** — novo expansor **📇 Catálogo de artigos** no 📦 Stock, com descrição, fornecedor e ponto de encomenda editáveis em grelha |
+| **Edições manuais em risco de serem substituídas pelo upload seguinte** | Nova coluna `curated` no catálogo (migração idempotente): o que editares no catálogo ou carregares via master data fica **protegido** — os uploads automáticos (Article do audit, memo das POs) já não substituem esses campos |
+| **Fornecedor/descrição vazios apareciam como "0" na página Hoje** | Células de texto vazias mostram agora vazio — o 0 é só para colunas numéricas |
+
+**Ordem recomendada após o deploy:** carrega o stock (preenche descrições do audit) → carrega as POs de tecido (preenche fornecedores em falta) → ajusta as poucas descrições que quiseres no 📦 Stock » 📇 Catálogo de artigos (ficam protegidas para sempre).
+
+**Como aplicar:** copiar `app.py` → commit → Railway. **Sem re-seed** — migração idempotente adiciona a coluna `curated` sem tocar nos dados.
+
+---
+
 ## v8.4 — Descrições (Memo Main) sincronizadas no upload de tecido
 
 | Problema | Correção |

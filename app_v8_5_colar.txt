@@ -1,5 +1,17 @@
 """
-SNT APS Portugal - Stock & Produção v8.4
+SNT APS Portugal - Stock & Produção v8.5
+v8.5 (MASTER DATA DE ARTIGOS — fornecedor/descrição completos e protegidos):
+- Causa dos "0" e descrições desconectadas: refs criadas pelo upload de stock ficavam
+  sem fornecedor nem descrição; a descrição só vinha do memo da PO (por linha, às
+  vezes genérico) e o fornecedor não era preenchido por upload nenhum
+- Upload de stock preenche descrições vazias com a coluna 'Article' do audit;
+  upload de POs de tecido preenche o fornecedor quando está vazio (nunca sobrescreve)
+- Novo upload e) Catálogo de artigos (master data) no Reset & Recarga: Excel/CSV com
+  ref + fornecedor + descrição (aceita o próprio audit ou export NetSuite)
+- Novo catálogo editável em 📦 Stock: descrição, fornecedor e ponto de encomenda.
+  Edições manuais e master data marcam a ref como 'curated' (migração idempotente) —
+  os uploads automáticos já não substituem esses campos
+- Página Hoje: fornecedor/descrição vazios mostram '' em vez de 0
 v8.4 (DESCRIÇÕES/MEMO SINCRONIZADAS NO UPLOAD DE TECIDO):
 - A grelha A Chegar mostra a Descrição do catálogo fabric_refs (JOIN), que sobrevive
   ao reset por design — e o _ensure_refs só inseria refs NOVAS, nunca atualizava o
@@ -1189,8 +1201,16 @@ T = {
  'rs_loaded': '✔ ficheiro já carregado nesta sessão — faz reset ou carrega outro ficheiro para repetir.',
  'rs_file_err': 'Não consegui ler o ficheiro: {e}',
  'rs_nothing': 'Nenhum registo válido encontrado.',
- 'ok_up_stock': '📦 Stock carregado: {n} lotes agregados ({m}m) — {a}m disponível · {p}m em processo. Refs novas no catálogo: {r}',
- 'ok_up_fab': '🚢 {f}: {n} linhas em {p} POs ({m}m) carregadas. Removidas por ausência no ficheiro: {x}. Descrições (memo) atualizadas: {d}. Refs novas no catálogo: {r}',
+ 'ok_up_stock': '📦 Stock carregado: {n} lotes agregados ({m}m) — {a}m disponível · {p}m em processo. Refs novas no catálogo: {r}. Descrições preenchidas (Article do audit): {d}',
+ 'ok_up_fab': '🚢 {f}: {n} linhas em {p} POs ({m}m) carregadas. Removidas por ausência no ficheiro: {x}. Descrições (memo) atualizadas: {d}. Fornecedores preenchidos: {s}. Refs novas no catálogo: {r}',
+ 'rs_up_master': 'e · Catálogo de artigos (master data)',
+ 'rs_up_master_d': 'Excel/CSV com colunas de <b>ref</b> (Reference / Item Number), <b>fornecedor</b> e <b>descrição</b> — atualiza refs existentes e cria as novas. Estes valores ficam <b>protegidos</b>: os uploads de stock/POs já não os substituem. Aceita o próprio audit (Reference / Color + Article) ou uma exportação NetSuite.',
+ 'ok_up_master': '📇 {f}: {u} refs atualizadas · {n} refs novas — ficam protegidas contra uploads.',
+ 'cat_title': '📇 Catálogo de artigos (descrição · fornecedor · ponto de encomenda)',
+ 'cat_help': 'Edita diretamente e guarda. O que editares aqui fica <b>protegido</b> — os uploads de stock e de POs já não substituem esses campos.',
+ 'cat_save': '💾 Guardar catálogo',
+ 'ok_cat_save': '📇 Catálogo guardado: {n} refs atualizadas e protegidas.',
+ 'c_reorder': 'Ponto de encomenda',
  'rs_clear_fab_btn': '🧹 Limpar encomendas de tecido em aberto (EXPECTED)',
  'rs_up_fab_cleared': '🧹 Encomendas de tecido em aberto removidas: {n}. Faturadas/em trânsito não são tocadas.',
  'ok_up_garm': '👕 POs garment carregadas: {n} — completa a ref de tecido na tabela de Produção.',
@@ -1556,8 +1576,16 @@ T = {
  'rs_loaded': '✔ file already loaded in this session — reset or upload a different file to repeat.',
  'rs_file_err': 'Could not read the file: {e}',
  'rs_nothing': 'No valid records found.',
- 'ok_up_stock': '📦 Stock loaded: {n} aggregate lots ({m}m) — {a}m available · {p}m in process. New refs in catalogue: {r}',
- 'ok_up_fab': '🚢 {f}: {n} lines across {p} POs ({m}m) loaded. Removed (absent from file): {x}. Descriptions (memo) updated: {d}. New refs in catalogue: {r}',
+ 'ok_up_stock': '📦 Stock loaded: {n} aggregate lots ({m}m) — {a}m available · {p}m in process. New refs in catalogue: {r}. Descriptions filled (audit Article): {d}',
+ 'ok_up_fab': '🚢 {f}: {n} lines across {p} POs ({m}m) loaded. Removed (absent from file): {x}. Descriptions (memo) updated: {d}. Suppliers filled: {s}. New refs in catalogue: {r}',
+ 'rs_up_master': 'e · Article catalogue (master data)',
+ 'rs_up_master_d': 'Excel/CSV with <b>ref</b> (Reference / Item Number), <b>supplier</b> and <b>description</b> columns — updates existing refs and creates new ones. These values become <b>protected</b>: stock/PO uploads no longer overwrite them. Accepts the audit file itself (Reference / Color + Article) or a NetSuite export.',
+ 'ok_up_master': '📇 {f}: {u} refs updated · {n} new refs — protected against uploads.',
+ 'cat_title': '📇 Article catalogue (description · supplier · reorder point)',
+ 'cat_help': 'Edit directly and save. Anything you edit here becomes <b>protected</b> — stock and PO uploads no longer overwrite those fields.',
+ 'cat_save': '💾 Save catalogue',
+ 'ok_cat_save': '📇 Catalogue saved: {n} refs updated and protected.',
+ 'c_reorder': 'Reorder point',
  'rs_clear_fab_btn': '🧹 Clear open fabric orders (EXPECTED)',
  'rs_up_fab_cleared': '🧹 Open fabric orders removed: {n}. Invoiced/in-transit orders are untouched.',
  'ok_up_garm': '👕 Garment POs loaded: {n} — complete the fabric ref in the Production table.',
@@ -2514,6 +2542,12 @@ def init_db():
     if 'date_invoiced' not in inc_cols:
         cursor.execute("ALTER TABLE incoming_fabric ADD COLUMN date_invoiced TEXT")
 
+    # Migração v8.5: catálogo com marca "curated" — descrição/fornecedor editados
+    # manualmente ou via master data ficam protegidos dos uploads automáticos
+    cursor.execute("PRAGMA table_info(fabric_refs)")
+    if 'curated' not in [r[1] for r in cursor.fetchall()]:
+        cursor.execute("ALTER TABLE fabric_refs ADD COLUMN curated INTEGER DEFAULT 0")
+
     # Consistência v3.8: PO com cortes registados está em CUTTING
     cursor.execute("""UPDATE production SET status = 'CUTTING' WHERE status = 'PENDING'
                       AND po_number IN (SELECT DISTINCT po_garment FROM consumptions)""")
@@ -2521,7 +2555,8 @@ def init_db():
     cursor.execute("SELECT COUNT(*) FROM fabric_refs")
     if cursor.fetchone()[0] == 0:
         for ref, desc, supplier, reorder in FABRIC_REFS:
-            cursor.execute("INSERT INTO fabric_refs VALUES (?,?,?,?,?)", (ref, desc, supplier, reorder, 'm'))
+            cursor.execute("INSERT INTO fabric_refs (ref_code, description, supplier, reorder_point, unit) VALUES (?,?,?,?,?)",
+                           (ref, desc, supplier, reorder, 'm'))
 
         for po, supplier, ref, metres, date, status in INCOMING_FABRIC:
             cursor.execute("""INSERT INTO incoming_fabric (po_number, supplier, ref_code, total_metres, expected_date, status, tracking_ref, date_created)
@@ -2662,6 +2697,9 @@ def get_stock_position():
     result = result.drop(columns=['fabric_ref'], errors='ignore')
     result = result.merge(cores_df, on='ref_code', how='left')
     result['cores'] = result['cores'].fillna('')
+    # v8.5: colunas de texto vazias mostram '' — não 0 (só as numéricas levam 0)
+    for _tc in ('supplier', 'description'):
+        result[_tc] = result[_tc].fillna('')
     result = result.fillna(0)
 
     result['stock_liquido'] = result['disponivel'] + result['em_processo']
@@ -4189,6 +4227,40 @@ def _render_stock_body():
         clean_df.columns = [t('c_supplier'), t('c_ref'), t('c_color'), t('c_metres'), t('c_lot'), t('c_wh'), t('c_status'), t('c_po'), t('c_notes'), t('c_token')]
         clean_df = apply_color_badges(clean_df, 'Cor')
         render_table(clean_df, height=500)
+
+        # --- Catálogo de artigos (v8.5): descrição/fornecedor editáveis e protegidos ---
+        with st.expander(t('cat_title')):
+            st.markdown(f'<div class="section-subtitle">{t("cat_help")}</div>', unsafe_allow_html=True)
+            cat_df = query_to_df("SELECT ref_code, description, supplier, reorder_point FROM fabric_refs ORDER BY ref_code")
+            cat_ed = st.data_editor(cat_df, key='cat_grid', hide_index=True, use_container_width=True,
+                                    disabled=['ref_code'],
+                                    column_config={'ref_code': t('c_ref'), 'description': t('c_desc'),
+                                                   'supplier': t('c_supplier'), 'reorder_point': t('c_reorder')})
+            if st.button(t('cat_save'), key='cat_save_btn'):
+                def _norm(v):
+                    if v is None or (isinstance(v, float) and pd.isna(v)):
+                        return ''
+                    return str(v).strip()
+                _old = {r['ref_code']: r for _, r in cat_df.iterrows()}
+                n_upd = 0
+                for _, r in cat_ed.iterrows():
+                    o = _old.get(r['ref_code'])
+                    if o is None:
+                        continue
+                    try:
+                        rp = float(r['reorder_point']) if pd.notna(r['reorder_point']) else 500.0
+                    except (TypeError, ValueError):
+                        rp = 500.0
+                    o_rp = float(o['reorder_point']) if pd.notna(o['reorder_point']) else 500.0
+                    if (_norm(r['description']) != _norm(o['description'])
+                            or _norm(r['supplier']) != _norm(o['supplier']) or rp != o_rp):
+                        execute_sql("""UPDATE fabric_refs SET description=?, supplier=?, reorder_point=?,
+                                       curated=1 WHERE ref_code=?""",
+                                    (_norm(r['description']) or None, _norm(r['supplier']) or None,
+                                     rp, r['ref_code']))
+                        n_upd += 1
+                flash('success', t('ok_cat_save', n=n_upd))
+                st.rerun()
 
         # --- Atribuir / corrigir cor de rolos ---
         # v5: só contam rolos com stock real (metres > 0) — lotes zerados por consolidação não poluem
@@ -6212,6 +6284,7 @@ def parse_audit_stock(data):
     df = xls.parse(sheet)
     ref_col = next((c for c in df.columns if 'reference' in str(c).lower()), None)
     tot_col = next((c for c in df.columns if str(c).strip().lower() == 'total'), None)
+    art_col = next((c for c in df.columns if 'article' in str(c).lower()), None)  # v8.5
     if not ref_col:
         raise ValueError('coluna Reference / Color não encontrada')
     ent_cols = [c for c in df.columns if c not in (ref_col, tot_col) and 'article' not in str(c).lower()]
@@ -6223,6 +6296,9 @@ def parse_audit_stock(data):
         ref, color = _split_ref_color(rc)
         if not ref or ref.lower() == 'total':
             continue
+        art = str(r.get(art_col) or '').strip() if art_col else ''  # v8.5: descrição por ref
+        if art.lower() in ('nan', 'none'):
+            art = ''
         cells = []
         for c in ent_cols:
             v = pd.to_numeric(r.get(c), errors='coerce')
@@ -6253,7 +6329,8 @@ def parse_audit_stock(data):
             if x[2] <= 0:
                 continue
             rows.append({'ref': ref, 'color': color, 'entity': x[0], 'status': x[1],
-                         'metres': round(x[2], 2), 'adj': '; '.join(adj) if adj else None})
+                         'metres': round(x[2], 2), 'adj': '; '.join(adj) if adj else None,
+                         'article': art or None})
     # total declarado no ficheiro: linha de grand-total (sem ref) ou soma da coluna Total dos dados
     file_tot = None
     if tot_col:
@@ -6398,6 +6475,18 @@ def apply_stock_upload(rows, sheet):
     now = datetime.now().isoformat()
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
+    # v8.5: preencher descrições vazias com o 'Article' do audit (nunca sobrescreve;
+    # refs marcadas como curated estão protegidas)
+    art_map = {}
+    for r in rows:
+        if r.get('article'):
+            art_map.setdefault(r['ref'], r['article'])
+    n_desc = 0
+    for ref, art in art_map.items():
+        cur.execute("""UPDATE fabric_refs SET description=?
+                       WHERE ref_code=? AND (description IS NULL OR description='')
+                       AND (curated IS NULL OR curated=0)""", (art, ref))
+        n_desc += cur.rowcount
     for i, r in enumerate(rows):
         tok = f'AGG-{mx + i + 1:04d}'
         notes = f'Lote agregado — upload stock ({sheet})'
@@ -6413,7 +6502,7 @@ def apply_stock_upload(rows, sheet):
                      f'Upload stock agregado ({sheet}) — {r["status"]}'))
     conn.commit()
     conn.close()
-    return len(rows), new_refs
+    return len(rows), new_refs, n_desc
 
 def apply_fabric_po_upload(rows):
     """Encomendas de tecido → incoming_fabric (EXPECTED, destino atribuído depois na grelha).
@@ -6449,6 +6538,7 @@ def apply_fabric_po_upload(rows):
     # fabric_refs sobrevive ao reset por design e o _ensure_refs só insere refs novas,
     # por isso a grelha mostrava o memo "antigo" para sempre. Quando a mesma ref tem
     # memos diferentes em POs do ficheiro, ganha o da PO mais recente (Creation Date).
+    # v8.5: refs curated (edição manual / master data) ficam de fora da sincronização.
     desc_map = {}
     for r in sorted(rows, key=lambda x: x['created'] or ''):
         m = (r['memo'] or '').strip()
@@ -6457,12 +6547,76 @@ def apply_fabric_po_upload(rows):
     n_desc = 0
     for ref, memo in desc_map.items():
         cur.execute("""UPDATE fabric_refs SET description=?
-                       WHERE ref_code=? AND (description IS NULL OR description <> ?)""",
+                       WHERE ref_code=? AND (description IS NULL OR description <> ?)
+                       AND (curated IS NULL OR curated = 0)""",
                     (memo, ref, memo))
         n_desc += cur.rowcount
+    # v8.5: preencher fornecedor em falta a partir do nome do fornecedor na PO
+    # (só preenche vazios — nunca sobrescreve o seed nem edições manuais)
+    sup_map = {}
+    for r in rows:
+        s = (r['supplier'] or '').strip()
+        if r['ref'] and s and s.lower() not in ('nan', 'none'):
+            sup_map[r['ref']] = s
+    n_sup = 0
+    for ref, sup in sup_map.items():
+        cur.execute("""UPDATE fabric_refs SET supplier=?
+                       WHERE ref_code=? AND (supplier IS NULL OR supplier='')""", (sup, ref))
+        n_sup += cur.rowcount
     conn.commit()
     conn.close()
-    return new_refs, removed, n_desc
+    return new_refs, removed, n_desc, n_sup
+
+def parse_master_data(data, name):
+    """v8.5 — master data de artigos: ref + fornecedor + descrição (aliases flexíveis).
+    Aceita também o próprio audit (Reference / Color + Article) ou export NetSuite."""
+    df = pd.read_csv(BytesIO(data)) if name.lower().endswith('.csv') else pd.read_excel(BytesIO(data))
+    def pick(*aliases):
+        for c in df.columns:
+            cl = str(c).lower().strip()
+            if any(a in cl for a in aliases):
+                return c
+        return None
+    rc = pick('reference', 'ref', 'item', 'código', 'codigo')
+    dc = pick('descri', 'memo', 'article', 'artigo', 'designação', 'designacao', 'name')
+    sc = pick('fornecedor', 'supplier', 'vendor', 'fabricante', 'manufacturer')
+    if not rc:
+        raise ValueError('coluna de referência não encontrada (Reference / Item Number / Ref)')
+    rows = {}
+    for _, r in df.iterrows():
+        raw = r.get(rc)
+        if pd.isna(raw):
+            continue
+        ref, _color = _split_ref_color(str(raw).strip())
+        if not ref or ref.lower() == 'total':
+            continue
+        desc = str(r.get(dc) or '').strip() if dc else ''
+        sup = str(r.get(sc) or '').strip() if sc else ''
+        rows[ref] = {'ref': ref,
+                     'desc': None if desc.lower() in ('', 'nan', 'none') else desc,
+                     'supplier': None if sup.lower() in ('', 'nan', 'none') else sup}
+    return list(rows.values())
+
+def apply_master_data(rows):
+    """v8.5: master data → catálogo. Atualiza refs existentes, cria as novas,
+    e marca tudo como curated=1 (protegido contra uploads automáticos)."""
+    existing = set(query_to_df("SELECT ref_code FROM fabric_refs")['ref_code'])
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    n_upd = n_new = 0
+    for r in rows:
+        if r['ref'] in existing:
+            cur.execute("""UPDATE fabric_refs SET description = COALESCE(?, description),
+                             supplier = COALESCE(?, supplier), curated=1
+                           WHERE ref_code=?""", (r['desc'], r['supplier'], r['ref']))
+            n_upd += 1
+        else:
+            cur.execute("""INSERT INTO fabric_refs (ref_code, description, supplier, reorder_point, unit, curated)
+                           VALUES (?,?,?,500,'m',1)""", (r['ref'], r['desc'], r['supplier']))
+            n_new += 1
+    conn.commit()
+    conn.close()
+    return n_upd, n_new
 
 def clear_expected_fabric_orders():
     """v8.3: limpa APENAS encomendas de tecido em aberto (EXPECTED)."""
@@ -6590,7 +6744,7 @@ def render_reset_reload():
             # carregados + ficheiros retidos nos uploaders) — fica tudo fresco no mesmo separador
             for _k in [k for k in list(st.session_state.keys())
                        if k.startswith('_rs_done_') or k in ('rs_f_stock', 'rs_f_fab', 'rs_f_garm',
-                                                             'rs_f_hist', '_rs_warn_models')]:
+                                                             'rs_f_hist', 'rs_f_master', '_rs_warn_models')]:
                 del st.session_state[_k]
             flash('success', t('ok_wipe', r=counts['fabric_rolls'], i=counts['incoming_fabric'],
                                p=counts['production'], c=counts['consumptions'], m=counts['movements']))
@@ -6623,11 +6777,11 @@ def render_reset_reload():
                     if _already('stock', f):
                         st.caption(t('rs_loaded'))
                     elif st.button(f"{t('rs_load')} ({len(rows)})", key='rs_b_stock'):
-                        n, new_refs = apply_stock_upload(rows, sheet)
+                        n, new_refs, n_art = apply_stock_upload(rows, sheet)
                         _mark_done('stock', f)
                         st.session_state.pop('rs_f_stock', None)  # v8.3: larga o ficheiro retido
                         flash('success', t('ok_up_stock', n=n, m=f"{tot:,.1f}", a=f"{av:,.1f}",
-                                           p=f"{tot - av:,.1f}", r=len(new_refs)))
+                                           p=f"{tot - av:,.1f}", r=len(new_refs), d=n_art))
                         st.rerun()
             except Exception as e:
                 st.error(t('rs_file_err', e=e))
@@ -6655,13 +6809,13 @@ def render_reset_reload():
                         st.caption(t('rs_loaded'))
                     elif st.button(f"{t('rs_load')} ({len(rows)})", key='rs_b_fab'):
                         # v8.3: snapshot — apaga EXPECTED ausentes do ficheiro
-                        # v8.4: devolve também descrições (memo) sincronizadas no catálogo
-                        new_refs, removed, n_desc = apply_fabric_po_upload(rows)
+                        # v8.4/v8.5: devolve descrições sincronizadas + fornecedores preenchidos
+                        new_refs, removed, n_desc, n_sup = apply_fabric_po_upload(rows)
                         _mark_done('fab', f)
                         st.session_state.pop('rs_f_fab', None)  # v8.3: larga o ficheiro retido
                         flash('success', t('ok_up_fab', f=f.name, n=len(rows), p=n_pos,
                                            m=f"{sum(r['metres'] for r in rows):,.1f}",
-                                           x=removed, d=n_desc, r=len(new_refs)))
+                                           x=removed, d=n_desc, s=n_sup, r=len(new_refs)))
                         st.rerun()
             except Exception as e:
                 st.error(t('rs_file_err', e=e))
@@ -6717,6 +6871,28 @@ def render_reset_reload():
         if _warn:
             st.warning(t('rs_mould_warn', n=len(_warn)) + '  \n' + ' · '.join(_warn[:40])
                        + (' …' if len(_warn) > 40 else ''))
+
+    # e) master data de artigos (v8.5)
+    with st.expander(t('rs_up_master')):
+        st.markdown(f'<div class="section-subtitle">{t("rs_up_master_d")}</div>', unsafe_allow_html=True)
+        f = st.file_uploader('master', type=['xlsx', 'xls', 'csv'], key='rs_f_master', label_visibility='collapsed')
+        if f is not None:
+            try:
+                rows = parse_master_data(f.getvalue(), f.name)
+                if not rows:
+                    st.warning(t('rs_nothing'))
+                else:
+                    st.dataframe(pd.DataFrame(rows).head(25), use_container_width=True, hide_index=True)
+                    if _already('master', f):
+                        st.caption(t('rs_loaded'))
+                    elif st.button(f"{t('rs_load')} ({len(rows)})", key='rs_b_master'):
+                        n_upd, n_new = apply_master_data(rows)
+                        _mark_done('master', f)
+                        st.session_state.pop('rs_f_master', None)
+                        flash('success', t('ok_up_master', f=f.name, u=n_upd, n=n_new))
+                        st.rerun()
+            except Exception as e:
+                st.error(t('rs_file_err', e=e))
 
 def render_tools():
     """⚙️ Sistema (v7) — Movimentar · Rastreio · Exportar · Integrações num único menu."""
