@@ -1,3 +1,18 @@
+## v9.0 — Usabilidade & antecipação: POs auto-preenchidas, cobertura por cor, vista personalizável
+
+| Pedido | Implementação |
+|---|---|
+| **1) Reconhecimento automático ao carregar POs garment** | No upload de POs garment, a **ref de tecido é pré-preenchida** (+ molde + metros esperados) quando o mapa de consumos tem **exatamente 1 ref** para a base do modelo — só confirmas na tabela de Produção. O matching ignora prefixos de estação ("Women's Winter '26 - ", "NOOS - ") e essa normalização passou também a valer na **resolução de molde** de toda a app (menos avisos "modelo sem molde"). Testado com os ficheiros reais: **18 das 61 POs** entram já completas; as restantes ficam para escolha manual (modelos sem histórico ou com várias refs — conservador por design). Bónus: o **re-upload de POs garment já não apaga** ref/cor/molde/metros nem o estado das POs existentes (UPSERT) |
+| **2) Antecipar falhas de stock, ligar stock ↔ ordens ↔ chegadas** | Nova secção **🎯 Cobertura por cor — faltas prováveis** no topo do 🗓 Planeamento: necessidade das POs abertas por **ref+cor** vs disponível + em processo + a chegar, com duas coberturas (só stock · com chegadas) e estado 🔴 falta mesmo com chegadas / 🟠 depende de chegadas / 🟢 coberto, ordenado do pior para o melhor. É aqui que vês onde **mover reforços** (⚙️ Movimentar) ou onde esgotar é seguro porque há compra a caminho |
+| **3) Atualizar data de entrega das encomendas de tecido** | A coluna **Data Prevista** da grelha A Chegar passou a ser editável (com validação de data), ao lado da cor, destino e faturação já editáveis |
+| **4) Vista personalizável** | Novo expansor **👁 Personalizar vista** no ⚡ Hoje: mostra/esconde cada secção (KPIs, stock por armazém, alertas, próximas entregas, posição por ref, metragem por cor, pipeline) — a preferência mantém-se durante a sessão |
+| **5) Tabelas: ordenação e redimensionamento** | O **Detalhe de Rolos e Lotes** (📦 Stock) passou a grelha nativa: **ordenar por qualquer coluna** (clique no cabeçalho), **redimensionar colunas** e scroll próprio; o total de metros passou a caption por cima da grelha. As tabelas de introdução de dados (Produção, A Chegar, Catálogo) já eram editáveis |
+| **6) Menu lateral mais estreito** | Largura da sidebar reduzida de 336px para **250px** — mais espaço útil para as tabelas |
+
+**Como aplicar:** copiar `app.py` → commit → Railway. **Sem re-seed** — nenhuma migração nova, tudo retrocompatível.
+
+---
+
 ## v8.5 — Master data de artigos: fornecedor e descrição completos, editáveis e protegidos
 
 | Problema | Correção |

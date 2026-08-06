@@ -1,5 +1,18 @@
 """
-SNT APS Portugal - Stock & Produção v8.5
+SNT APS Portugal - Stock & Produção v9.0
+v9.0 (USABILIDADE & ANTECIPAÇÃO — menos edição manual, faltas previstas por cor):
+- POs garment: re-upload já não apaga ref/cor/molde/metros nem o estado (UPSERT);
+  ref de tecido pré-preenchida automaticamente (+ molde + metros) quando o mapa de
+  consumos tem exatamente 1 ref para a base do modelo — o utilizador só confirma
+- 🗓 Planeamento: nova secção "Cobertura por cor" — necessidade das POs abertas por
+  ref+cor vs disponível + em processo + a chegar. 🔴 falta mesmo com chegadas,
+  🟠 depende de chegadas, 🟢 coberto — antecipa roturas e orienta reforços/movimentos
+- 🚢 A Chegar: data de entrega (expected_date) editável na grelha, com validação
+- ⚡ Hoje: "👁 Personalizar vista" — mostra/esconde secções (KPIs, armazéns, alertas,
+  próximas entregas, posição por ref, metragem por cor, pipeline), preferência de sessão
+- 📦 Stock: detalhe de rolos em grelha nativa — ordenação por coluna e
+  redimensionamento (o total passa a caption; exportações sem linha TOTAL)
+- Menu lateral mais estreito (250px)
 v8.5 (MASTER DATA DE ARTIGOS — fornecedor/descrição completos e protegidos):
 - Causa dos "0" e descrições desconectadas: refs criadas pelo upload de stock ficavam
   sem fornecedor nem descrição; a descrição só vinha do memo da PO (por linha, às
@@ -542,6 +555,9 @@ CSS_TEMPLATE = """<style>
 
     /* Sidebar */
     [data-testid="stSidebar"], [data-testid="stSidebar"] > div:first-child { background: __SIDEBAR_BG__ !important; }
+    /* v9: menu lateral mais estreito (336px → 250px) */
+    [data-testid="stSidebar"][aria-expanded="true"] { min-width: 250px !important; max-width: 250px !important; }
+    [data-testid="stSidebar"][aria-expanded="true"] > div:first-child { min-width: 250px !important; max-width: 250px !important; width: 250px !important; }
     [data-testid="stSidebar"] .stMarkdown { color: var(--text); }
 
     /* Timeline */
@@ -1213,7 +1229,20 @@ T = {
  'c_reorder': 'Ponto de encomenda',
  'rs_clear_fab_btn': '🧹 Limpar encomendas de tecido em aberto (EXPECTED)',
  'rs_up_fab_cleared': '🧹 Encomendas de tecido em aberto removidas: {n}. Faturadas/em trânsito não são tocadas.',
- 'ok_up_garm': '👕 POs garment carregadas: {n} — completa a ref de tecido na tabela de Produção.',
+ 'ok_up_garm': '👕 POs garment carregadas: {n}. Ref de tecido pré-preenchida pelo histórico/mapa: {a} — confirma ou completa na tabela de Produção.',
+ 'ok_auto_v9': '🤖 arranque automático: {a} POs com ref pré-preenchida · {c} cores de PO aplicadas · {m} moldes associados (só casos sem ambiguidade)',
+ 'ok_inc_dates': '📅 {n} datas de entrega atualizadas',
+ 'vz_title': '👁 Personalizar vista',
+ 'vz_sub': 'Escolhe as secções visíveis nesta página — a preferência mantém-se durante a sessão.',
+ 'vz_kpi': 'KPIs', 'vz_wh': 'Stock por armazém', 'vz_alerts': 'Alertas', 'vz_next': 'Próximas entregas',
+ 'vz_pos': 'Posição por ref', 'vz_color': 'Metragem por cor', 'vz_pipe': 'Pipeline por confeccionador',
+ 'cov_title': '🎯 Cobertura por cor — faltas prováveis',
+ 'cov_sub': 'Necessidade das POs abertas por ref+cor vs disponível + em processo + a chegar. 🔴 falta mesmo com chegadas · 🟠 depende de chegadas · 🟢 coberto. POs sem cor definida aparecem como "(sem cor)".',
+ 'cov_need': 'Necessidade', 'cov_stock': 'Cob. stock', 'cov_total': 'Cob. c/ chegadas',
+ 'cov_st_short': 'falta', 'cov_st_wait': 'depende de chegadas',
+ 'cov_only': 'Só faltas e riscos',
+ 'cov_none': '✅ Sem faltas prováveis — necessidade coberta.',
+ 'cov_no_need': 'Sem necessidade em aberto por cor (POs sem ref/cor definida não entram aqui).',
  'ok_up_hist': '📊 Histórico carregado: {c} consumos ({d} duplicados ignorados), {p} POs antigas criadas (INVOICED), {u} POs atualizadas com ref/cor. Real médio do mapa recalculado.',
  'rs_mould_warn': '⚠️ {n} modelos do histórico sem molde base no mapa — aloca o molde em 📊 Consumos para recalcular valores futuros:',
  'rs_recon': 'Reconciliação — total no ficheiro: {f}m · a importar: {i}m',
@@ -1588,7 +1617,20 @@ T = {
  'c_reorder': 'Reorder point',
  'rs_clear_fab_btn': '🧹 Clear open fabric orders (EXPECTED)',
  'rs_up_fab_cleared': '🧹 Open fabric orders removed: {n}. Invoiced/in-transit orders are untouched.',
- 'ok_up_garm': '👕 Garment POs loaded: {n} — complete the fabric ref in the Production table.',
+ 'ok_up_garm': '👕 Garment POs loaded: {n}. Fabric ref pre-filled from history/map: {a} — confirm or complete in the Production table.',
+ 'ok_auto_v9': '🤖 automatic startup: {a} POs with pre-filled ref · {c} PO colors applied · {m} moulds linked (unambiguous cases only)',
+ 'ok_inc_dates': '📅 {n} delivery dates updated',
+ 'vz_title': '👁 Customize view',
+ 'vz_sub': 'Choose which sections are visible on this page — kept for the session.',
+ 'vz_kpi': 'KPIs', 'vz_wh': 'Stock by warehouse', 'vz_alerts': 'Alerts', 'vz_next': 'Next deliveries',
+ 'vz_pos': 'Position by ref', 'vz_color': 'Metres by colour', 'vz_pipe': 'Pipeline by garment maker',
+ 'cov_title': '🎯 Coverage by colour — likely shortages',
+ 'cov_sub': 'Open PO demand by ref+colour vs available + in process + incoming. 🔴 short even with arrivals · 🟠 depends on arrivals · 🟢 covered. POs without colour appear as "(sem cor)".',
+ 'cov_need': 'Demand', 'cov_stock': 'Stock cover', 'cov_total': 'Cover w/ arrivals',
+ 'cov_st_short': 'short', 'cov_st_wait': 'depends on arrivals',
+ 'cov_only': 'Shortages and risks only',
+ 'cov_none': '✅ No likely shortages — demand is covered.',
+ 'cov_no_need': 'No open demand by colour (POs without ref/colour are not included).',
  'ok_up_hist': '📊 History loaded: {c} consumptions ({d} duplicates skipped), {p} old POs created (INVOICED), {u} POs updated with ref/colour. Map actuals recalculated.',
  'rs_mould_warn': '⚠️ {n} history models without a base mould in the map — allocate the mould in 📊 Consumption to recalculate future values:',
  'rs_recon': 'Reconciliation — file total: {f}m · to import: {i}m',
@@ -3276,11 +3318,19 @@ def resolve_map_entry(model_name, fabric_ref=None, base_override=None):
     if not base:
         return None
     bl = base.lower()
+    nb = _norm_base(base)  # v9: matching também sem prefixo de estação ('Winter '26 - ', 'NOOS - ')
+    rows_nb = rows['base_model'].apply(_norm_base) if nb else None
     m = rows[(rows['base_model'].str.lower() == bl) & (rows['fit'].str.lower() == fit.lower())]
     if m.empty:
         m = rows[(rows['base_model'].str.lower() == bl) & (rows['fit'] == '')]
+    if m.empty and nb:
+        m = rows[(rows_nb == nb) & (rows['fit'].str.lower() == fit.lower())]
+    if m.empty and nb:
+        m = rows[(rows_nb == nb) & (rows['fit'] == '')]
     if m.empty:
         cand = rows[rows['base_model'].str.lower().str.startswith(bl)]
+        if cand.empty and nb:
+            cand = rows[rows_nb.str.startswith(nb)]
         if not cand.empty:
             plain = cand[cand['base_model'].str.lower().str.contains('plain')]
             m = (plain if not plain.empty else cand).head(1)
@@ -4222,11 +4272,13 @@ def _render_stock_body():
             query += " AND r.status = ?"; params.append(selected_status)
         query += " ORDER BY r.ref_code, r.token LIMIT 500"
 
-        rolls_df = add_total_row(query_to_df(query, params))
-        clean_df = safe_display_df(rolls_df)
-        clean_df.columns = [t('c_supplier'), t('c_ref'), t('c_color'), t('c_metres'), t('c_lot'), t('c_wh'), t('c_status'), t('c_po'), t('c_notes'), t('c_token')]
-        clean_df = apply_color_badges(clean_df, 'Cor')
-        render_table(clean_df, height=500)
+        rolls_df = query_to_df(query, params)
+        _tot_m = float(rolls_df['metres'].sum()) if not rolls_df.empty else 0.0
+        st.caption(f"{len(rolls_df)} {t('u_wh_rolls')} · {_tot_m:,.1f}m")
+        grid_df = safe_display_df(rolls_df)
+        grid_df.columns = [t('c_supplier'), t('c_ref'), t('c_color'), t('c_metres'), t('c_lot'), t('c_wh'), t('c_status'), t('c_po'), t('c_notes'), t('c_token')]
+        # v9: grelha nativa — ordenação por coluna, redimensionamento e pesquisa visual
+        st.dataframe(grid_df, hide_index=True, use_container_width=True, height=500)
 
         # --- Catálogo de artigos (v8.5): descrição/fornecedor editáveis e protegidos ---
         with st.expander(t('cat_title')):
@@ -4388,7 +4440,8 @@ def render_incoming():
                 st.error(t('err_po_dup'))
             else:
                 if ni_ref == t('f_new_opt'):
-                    execute_sql("INSERT OR IGNORE INTO fabric_refs VALUES (?,?,?,?,?)",
+                    execute_sql("""INSERT OR IGNORE INTO fabric_refs (ref_code, description, supplier, reorder_point, unit)
+                                   VALUES (?,?,?,?,?)""",
                                 (final_ref, ni_desc_new.strip() or None, final_sup, 500, 'm'))
                 execute_sql("""INSERT INTO incoming_fabric (po_number, supplier, ref_code, color, total_metres, expected_date, status, destination, date_created)
                               VALUES (?,?,?,?,?,?,?,?,?)""",
@@ -4421,7 +4474,7 @@ def render_incoming():
         edited_inc = st.data_editor(
             incoming_df, key='inc_grid', hide_index=True, use_container_width=True,
             disabled=['po_number', 'supplier', 'ref_code', 'description', 'total_metres',
-                      'expected_date', 'status'],
+                      'status'],  # v9: expected_date passa a ser editável
             column_config={
                 'po_number': st.column_config.TextColumn(t('c_po2')),
                 'supplier': st.column_config.TextColumn(t('c_supplier')),
@@ -4438,23 +4491,31 @@ def render_incoming():
             prev = {str(r['po_number']): (str(r['color']).strip() if pd.notna(r['color']) else '',
                                           str(r['date_invoiced']).strip()[:10] if pd.notna(r['date_invoiced']) else '',
                                           r['status'],
-                                          str(r['destination']).strip() if pd.notna(r['destination']) else '')
+                                          str(r['destination']).strip() if pd.notna(r['destination']) else '',
+                                          str(r['expected_date']).strip()[:10] if pd.notna(r['expected_date']) else '')
                     for _, r in incoming_df.iterrows()}
-            bad_d, n_c, n_d2, launched, reverted, blocked = [], 0, 0, [], [], []
+            bad_d, n_c, n_d2, n_e, launched, reverted, blocked = [], 0, 0, 0, [], [], []
             for _, r in edited_inc.iterrows():
                 po = str(r['po_number'])
                 if po not in prev:
                     continue
-                pc, pdiv, pst, pdest = prev[po]
+                pc, pdiv, pst, pdest, pexp = prev[po]
                 nc = str(r['color']).strip() if pd.notna(r['color']) else ''
                 nd = str(r['date_invoiced']).strip()[:10] if pd.notna(r['date_invoiced']) else ''
                 ndest = str(r['destination']).strip() if pd.notna(r['destination']) else ''
-                if nd:
-                    try:
-                        date.fromisoformat(nd)
-                    except ValueError:
-                        bad_d.append((po, nd))
-                        continue
+                nexp = str(r['expected_date']).strip()[:10] if pd.notna(r['expected_date']) else ''
+                for _dv in (nd, nexp):
+                    if _dv:
+                        try:
+                            date.fromisoformat(_dv)
+                        except ValueError:
+                            bad_d.append((po, _dv))
+                if any(d == nd or d == nexp for p, d in bad_d if p == po):
+                    continue
+                # v9: data de entrega editável
+                if nexp != pexp:
+                    execute_sql("UPDATE incoming_fabric SET expected_date = ? WHERE po_number = ?", (nexp or None, po))
+                    n_e += 1
                 if nc != pc:
                     execute_sql("UPDATE incoming_fabric SET color = ? WHERE po_number = ?", (nc or None, po))
                     n_c += 1
@@ -4482,6 +4543,8 @@ def render_incoming():
             msgs = []
             if n_c:
                 msgs.append(t('ok_inc_colors', n=n_c))
+            if n_e:
+                msgs.append(t('ok_inc_dates', n=n_e))
             if n_d2:
                 msgs.append(t('ok_inc_dest', n=n_d2))
             if launched:
@@ -5892,6 +5955,17 @@ def render_today():
     </div>
     """, unsafe_allow_html=True)
 
+    # ---------- v9: personalizar vista — secções visíveis (preferência de sessão) ----------
+    with st.expander(t('vz_title'), expanded=False):
+        st.markdown(f'<div class="section-subtitle">{t("vz_sub")}</div>', unsafe_allow_html=True)
+        _vz = {}
+        _vc = st.columns(4)
+        for _i, (_k, _lbl) in enumerate([('kpi', t('vz_kpi')), ('wh', t('vz_wh')), ('alerts', t('vz_alerts')),
+                                         ('next', t('vz_next')), ('pos', t('vz_pos')), ('color', t('vz_color')),
+                                         ('pipe', t('vz_pipe'))]):
+            with _vc[_i % 4]:
+                _vz[_k] = st.checkbox(_lbl, value=True, key=f'vz_{_k}')
+
     stock_df = get_stock_position()
     alerts = compute_alerts()
     plan = plan_all_pos(get_lead_times())
@@ -5907,123 +5981,130 @@ def render_today():
         (t('u_k_alerts'), n_crit, t('u_k_alerts_d'), "down"),
         (t('u_k_risk'), n_risk, t('u_k_risk_d'), "warn"),
     ]
-    cols = st.columns(5)
-    for i, (label, value, delta, dt_) in enumerate(kpi_data):
-        with cols[i]:
-            st.markdown(f"""
-            <div class="kpi-card">
-                <div class="kpi-label">{label}</div>
-                <div class="kpi-value">{value:,.0f}{'<span style="font-size:14px;color:var(--muted)">m</span>' if i < 3 else ''}</div>
-                <div class="kpi-delta {dt_}">{delta}</div>
-            </div>
-            """, unsafe_allow_html=True)
+    if _vz['kpi']:
+        cols = st.columns(5)
+        for i, (label, value, delta, dt_) in enumerate(kpi_data):
+            with cols[i]:
+                st.markdown(f"""
+                <div class="kpi-card">
+                    <div class="kpi-label">{label}</div>
+                    <div class="kpi-value">{value:,.0f}{'<span style="font-size:14px;color:var(--muted)">m</span>' if i < 3 else ''}</div>
+                    <div class="kpi-delta {dt_}">{delta}</div>
+                </div>
+                """, unsafe_allow_html=True)
 
     # ---------- STOCK POR ARMAZÉM — AGORA ----------
-    st.markdown(f'<div class="section-title">{t("u_wh")}</div>', unsafe_allow_html=True)
-    wh = query_to_df("""SELECT warehouse,
-                               SUM(CASE WHEN status IN ('AVAILABLE','RESERVED') THEN metres ELSE 0 END) em_arm,
-                               SUM(CASE WHEN status = 'IN_PROCESS' THEN metres ELSE 0 END) em_curso,
-                               COUNT(*) rolos
-                        FROM fabric_rolls WHERE status != 'INVOICED' GROUP BY warehouse""")
-    wh['g'] = wh['warehouse'].apply(wh_group)
-    agg = wh.groupby('g', as_index=False)[['em_arm', 'em_curso', 'rolos']].sum()
-    inc_m = query_to_df("SELECT COALESCE(SUM(total_metres),0) m FROM incoming_fabric WHERE status IN ('EXPECTED','IN_TRANSIT')").iloc[0]['m']
-    cards = st.columns(len(agg) + 1)
-    for i, (_, r) in enumerate(agg.iterrows()):
-        tot = r['em_arm'] + r['em_curso']
-        pct = r['em_arm'] / tot * 100 if tot else 0
-        with cards[i]:
+    if _vz['wh']:
+        st.markdown(f'<div class="section-title">{t("u_wh")}</div>', unsafe_allow_html=True)
+        wh = query_to_df("""SELECT warehouse,
+                                   SUM(CASE WHEN status IN ('AVAILABLE','RESERVED') THEN metres ELSE 0 END) em_arm,
+                                   SUM(CASE WHEN status = 'IN_PROCESS' THEN metres ELSE 0 END) em_curso,
+                                   COUNT(*) rolos
+                            FROM fabric_rolls WHERE status != 'INVOICED' GROUP BY warehouse""")
+        wh['g'] = wh['warehouse'].apply(wh_group)
+        agg = wh.groupby('g', as_index=False)[['em_arm', 'em_curso', 'rolos']].sum()
+        inc_m = query_to_df("SELECT COALESCE(SUM(total_metres),0) m FROM incoming_fabric WHERE status IN ('EXPECTED','IN_TRANSIT')").iloc[0]['m']
+        cards = st.columns(len(agg) + 1)
+        for i, (_, r) in enumerate(agg.iterrows()):
+            tot = r['em_arm'] + r['em_curso']
+            pct = r['em_arm'] / tot * 100 if tot else 0
+            with cards[i]:
+                st.markdown(f"""
+                <div class="kpi-card" style="text-align:left;">
+                    <div class="kpi-label">🏭 {r['g']}</div>
+                    <div class="kpi-value" style="font-size:22px;">{tot:,.0f}<span style="font-size:13px;color:var(--muted)">m</span></div>
+                    <div style="height:8px;background:var(--line);border-radius:4px;overflow:hidden;margin:8px 0;">
+                        <div style="width:{pct:.0f}%;height:100%;background:var(--accent);float:left;"></div>
+                        <div style="width:{100 - pct:.0f}%;height:100%;background:var(--info);float:left;"></div>
+                    </div>
+                    <div class="kpi-delta up">■ {t('u_wh_in')}: {r['em_arm']:,.0f}m</div>
+                    <div class="kpi-delta" style="color:var(--info);">■ {t('u_wh_proc')}: {r['em_curso']:,.0f}m · {int(r['rolos'])} {t('u_wh_rolls')}</div>
+                </div>
+                """, unsafe_allow_html=True)
+        with cards[-1]:
             st.markdown(f"""
             <div class="kpi-card" style="text-align:left;">
-                <div class="kpi-label">🏭 {r['g']}</div>
-                <div class="kpi-value" style="font-size:22px;">{tot:,.0f}<span style="font-size:13px;color:var(--muted)">m</span></div>
+                <div class="kpi-label">🚢 {t('u_wh_inc')}</div>
+                <div class="kpi-value" style="font-size:22px;">{inc_m:,.0f}<span style="font-size:13px;color:var(--muted)">m</span></div>
                 <div style="height:8px;background:var(--line);border-radius:4px;overflow:hidden;margin:8px 0;">
-                    <div style="width:{pct:.0f}%;height:100%;background:var(--accent);float:left;"></div>
-                    <div style="width:{100 - pct:.0f}%;height:100%;background:var(--info);float:left;"></div>
+                    <div style="width:100%;height:100%;background:var(--warn);"></div>
                 </div>
-                <div class="kpi-delta up">■ {t('u_wh_in')}: {r['em_arm']:,.0f}m</div>
-                <div class="kpi-delta" style="color:var(--info);">■ {t('u_wh_proc')}: {r['em_curso']:,.0f}m · {int(r['rolos'])} {t('u_wh_rolls')}</div>
+                <div class="kpi-delta warn">{n_inc} {t('u_k_inc_d')}</div>
             </div>
             """, unsafe_allow_html=True)
-    with cards[-1]:
-        st.markdown(f"""
-        <div class="kpi-card" style="text-align:left;">
-            <div class="kpi-label">🚢 {t('u_wh_inc')}</div>
-            <div class="kpi-value" style="font-size:22px;">{inc_m:,.0f}<span style="font-size:13px;color:var(--muted)">m</span></div>
-            <div style="height:8px;background:var(--line);border-radius:4px;overflow:hidden;margin:8px 0;">
-                <div style="width:100%;height:100%;background:var(--warn);"></div>
-            </div>
-            <div class="kpi-delta warn">{n_inc} {t('u_k_inc_d')}</div>
-        </div>
-        """, unsafe_allow_html=True)
 
     # ---------- CENTRO DE ALERTAS COMPLETO (v7: a antiga página 🚨 Alertas vive aqui) ----------
-    render_alerts()
+    if _vz['alerts']:
+        render_alerts()
 
     # ---------- PRÓXIMAS ENTREGAS ----------
-    st.markdown(f'<div class="section-title">{t("u_next")}</div>', unsafe_allow_html=True)
-    if plan:
-        nd = pd.DataFrame([{t('pl_c_po'): p['po'], t('pl_c_model'): p['modelo'], t('pl_c_ref'): p['ref'],
-                            t('pl_c_del'): p['entrega'].isoformat(), t('pl_c_fab'): p['fab'],
-                            t('pl_c_state'): p['estado']} for p in plan[:6]])
-        render_table(nd, height=260)
-    else:
-        st.info(t('pl_none'))
+    if _vz['next']:
+        st.markdown(f'<div class="section-title">{t("u_next")}</div>', unsafe_allow_html=True)
+        if plan:
+            nd = pd.DataFrame([{t('pl_c_po'): p['po'], t('pl_c_model'): p['modelo'], t('pl_c_ref'): p['ref'],
+                                t('pl_c_del'): p['entrega'].isoformat(), t('pl_c_fab'): p['fab'],
+                                t('pl_c_state'): p['estado']} for p in plan[:6]])
+            render_table(nd, height=260)
+        else:
+            st.info(t('pl_none'))
 
     # ---------- POSIÇÃO POR REF (v7: herdado do antigo Dashboard) ----------
-    st.markdown(f'<div class="section-title">{t("d_pos")}</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="section-subtitle">{t("d_pos_sub")}</div>', unsafe_allow_html=True)
-    active_mask = (stock_df['total_stock'] > 0) | (stock_df['a_chegar'] > 0) | (stock_df['necessidade'] > 0)
-    n_hidden = int((~active_mask).sum())
-    show_empty = st.checkbox(t('d_show_empty') + (f' ({n_hidden})' if n_hidden else ''), value=False, key='dash_show_empty')
-    view_df = stock_df if show_empty else stock_df[active_mask]
-    view_df = view_df.sort_values(['planeamento', 'ref_code']).reset_index(drop=True)
-    display_df = view_df[['supplier', 'ref_code', 'description', 'cores', 'disponivel', 'em_processo',
-                          'stock_liquido', 'a_chegar', 'necessidade', 'planeamento', 'status']].copy()
+    if _vz['pos']:
+        st.markdown(f'<div class="section-title">{t("d_pos")}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="section-subtitle">{t("d_pos_sub")}</div>', unsafe_allow_html=True)
+        active_mask = (stock_df['total_stock'] > 0) | (stock_df['a_chegar'] > 0) | (stock_df['necessidade'] > 0)
+        n_hidden = int((~active_mask).sum())
+        show_empty = st.checkbox(t('d_show_empty') + (f' ({n_hidden})' if n_hidden else ''), value=False, key='dash_show_empty')
+        view_df = stock_df if show_empty else stock_df[active_mask]
+        view_df = view_df.sort_values(['planeamento', 'ref_code']).reset_index(drop=True)
+        display_df = view_df[['supplier', 'ref_code', 'description', 'cores', 'disponivel', 'em_processo',
+                              'stock_liquido', 'a_chegar', 'necessidade', 'planeamento', 'status']].copy()
 
-    def _cores_short(s):
-        if not s:
-            return ''
-        parts = [p.strip() for p in str(s).split(',') if p.strip()]
-        shown = ' '.join(color_dot(p) + p for p in parts[:3])
-        return shown + (f" +{len(parts) - 3}" if len(parts) > 3 else '')
-    display_df['cores'] = display_df['cores'].apply(_cores_short)
-    display_df = add_total_row(display_df)
-    display_df = safe_display_df(display_df)
-    display_df.columns = [t('c_supplier'), t('c_ref'), t('c_desc'), t('c_colors'), t('c_avail'),
-                          t('c_inproc'), t('c_net'), t('c_inc'), t('c_need'), t('c_plan'), t('c_status')]
-    render_table(display_df, height=400)
+        def _cores_short(s):
+            if not s:
+                return ''
+            parts = [p.strip() for p in str(s).split(',') if p.strip()]
+            shown = ' '.join(color_dot(p) + p for p in parts[:3])
+            return shown + (f" +{len(parts) - 3}" if len(parts) > 3 else '')
+        display_df['cores'] = display_df['cores'].apply(_cores_short)
+        display_df = add_total_row(display_df)
+        display_df = safe_display_df(display_df)
+        display_df.columns = [t('c_supplier'), t('c_ref'), t('c_desc'), t('c_colors'), t('c_avail'),
+                              t('c_inproc'), t('c_net'), t('c_inc'), t('c_need'), t('c_plan'), t('c_status')]
+        render_table(display_df, height=400)
 
     # metragem exata por cor (ref + cor)
-    with st.expander(t('d_color_br')):
-        st.markdown(f'<div class="section-subtitle">{t("d_color_br_sub")}</div>', unsafe_allow_html=True)
-        cb = query_to_df("""
-            SELECT ref_code, COALESCE(NULLIF(color, ''), '(sem cor)') AS cor,
-                   ROUND(SUM(CASE WHEN status = 'AVAILABLE' THEN metres ELSE 0 END), 2) AS disponivel,
-                   ROUND(SUM(CASE WHEN status = 'IN_PROCESS' THEN metres ELSE 0 END), 2) AS em_processo,
-                   ROUND(SUM(metres), 2) AS total
-            FROM fabric_rolls WHERE status != 'INVOICED'
-            GROUP BY ref_code, cor ORDER BY ref_code, total DESC
-        """)
-        if not cb.empty:
-            cb['cor'] = cb.apply(lambda r: color_dot(r['cor']) + ' ' + str(r['cor']), axis=1)
-            cb = add_total_row(cb)
-            cb = safe_display_df(cb)
-            cb.columns = [t('c_ref'), t('c_color'), t('c_avail'), t('c_inproc'), t('c_totalm')]
-            render_table(cb, height=450)
-        else:
-            st.info(t('no_data'))
+    if _vz['color']:
+        with st.expander(t('d_color_br')):
+            st.markdown(f'<div class="section-subtitle">{t("d_color_br_sub")}</div>', unsafe_allow_html=True)
+            cb = query_to_df("""
+                SELECT ref_code, COALESCE(NULLIF(color, ''), '(sem cor)') AS cor,
+                       ROUND(SUM(CASE WHEN status = 'AVAILABLE' THEN metres ELSE 0 END), 2) AS disponivel,
+                       ROUND(SUM(CASE WHEN status = 'IN_PROCESS' THEN metres ELSE 0 END), 2) AS em_processo,
+                       ROUND(SUM(metres), 2) AS total
+                FROM fabric_rolls WHERE status != 'INVOICED'
+                GROUP BY ref_code, cor ORDER BY ref_code, total DESC
+            """)
+            if not cb.empty:
+                cb['cor'] = cb.apply(lambda r: color_dot(r['cor']) + ' ' + str(r['cor']), axis=1)
+                cb = add_total_row(cb)
+                cb = safe_display_df(cb)
+                cb.columns = [t('c_ref'), t('c_color'), t('c_avail'), t('c_inproc'), t('c_totalm')]
+                render_table(cb, height=450)
+            else:
+                st.info(t('no_data'))
 
     # Pipeline por confeccionador
-    st.markdown(f'<div class="section-title">{t("d_pipe")}</div>', unsafe_allow_html=True)
-    prod_summary = query_to_df("""
-        SELECT confeccionador, COUNT(*) as num_pos, SUM(po_qty) as total_pcs, SUM(metres_expected) as total_m
-        FROM production WHERE status != 'INVOICED' GROUP BY confeccionador ORDER BY total_m DESC
-    """)
-    if not prod_summary.empty:
-        prod_summary = safe_display_df(prod_summary)
-        prod_summary.columns = [t('c_conf'), t('c_activepo'), t('c_totpcs'), t('c_mexp')]
-        render_table(prod_summary)
+    if _vz['pipe']:
+        st.markdown(f'<div class="section-title">{t("d_pipe")}</div>', unsafe_allow_html=True)
+        prod_summary = query_to_df("""
+            SELECT confeccionador, COUNT(*) as num_pos, SUM(po_qty) as total_pcs, SUM(metres_expected) as total_m
+            FROM production WHERE status != 'INVOICED' GROUP BY confeccionador ORDER BY total_m DESC
+        """)
+        if not prod_summary.empty:
+            prod_summary = safe_display_df(prod_summary)
+            prod_summary.columns = [t('c_conf'), t('c_activepo'), t('c_totpcs'), t('c_mexp')]
+            render_table(prod_summary)
 
 def render_alerts():
     """🚨 Centro de alertas automáticos — aprovações, molde/consumo, atrasos, roturas."""
@@ -6115,9 +6196,57 @@ def render_alerts():
                     unsafe_allow_html=True)
 
 def render_planning():
-    """🗓 Master Planning — plano retrógado tecido→corte→confeção→acabamento→entrega."""
+    """🗓 Master Planning — cobertura por cor (faltas prováveis) + plano retrógado."""
     st.markdown(f'<div class="section-title">{t("pl_title")}</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="section-subtitle">{t("pl_sub")}</div>', unsafe_allow_html=True)
+
+    # ---------- v9: cobertura por cor — antecipação de faltas ----------
+    st.markdown(f'<div class="section-title">{t("cov_title")}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="section-subtitle">{t("cov_sub")}</div>', unsafe_allow_html=True)
+    need = query_to_df("""
+        SELECT fabric_ref AS ref, COALESCE(NULLIF(TRIM(color), ''), '(sem cor)') AS cor,
+               ROUND(SUM(metres_expected), 1) AS necessidade
+        FROM production
+        WHERE status IN ('PENDING','CUTTING') AND fabric_ref IS NOT NULL AND fabric_ref != ''
+        GROUP BY fabric_ref, cor""")
+    stk = query_to_df("""
+        SELECT ref_code AS ref, COALESCE(NULLIF(TRIM(color), ''), '(sem cor)') AS cor,
+               ROUND(SUM(CASE WHEN status = 'AVAILABLE' THEN metres ELSE 0 END), 1) AS disponivel,
+               ROUND(SUM(CASE WHEN status = 'IN_PROCESS' THEN metres ELSE 0 END), 1) AS em_processo
+        FROM fabric_rolls WHERE status != 'INVOICED' GROUP BY ref_code, cor""")
+    inc = query_to_df("""
+        SELECT ref_code AS ref, COALESCE(NULLIF(TRIM(color), ''), '(sem cor)') AS cor,
+               ROUND(SUM(total_metres), 1) AS a_chegar
+        FROM incoming_fabric WHERE status IN ('EXPECTED','IN_TRANSIT') GROUP BY ref_code, cor""")
+    cov = need.merge(stk, on=['ref', 'cor'], how='left').merge(inc, on=['ref', 'cor'], how='left')
+    if cov.empty:
+        st.info(t('cov_no_need'))
+    else:
+        for _c in ('disponivel', 'em_processo', 'a_chegar'):
+            cov[_c] = cov[_c].fillna(0)
+        cov['cob_stock'] = cov['disponivel'] + cov['em_processo'] - cov['necessidade']
+        cov['cob_total'] = cov['cob_stock'] + cov['a_chegar']
+
+        def _cov_status(r):
+            if r['cob_total'] < 0:
+                return f"🔴 {t('cov_st_short')}"
+            if r['cob_stock'] < 0:
+                return f"🟠 {t('cov_st_wait')}"
+            return '🟢 ok'
+        cov['estado'] = cov.apply(_cov_status, axis=1)
+        cov = cov.sort_values(['cob_total', 'ref', 'cor']).reset_index(drop=True)
+        cov_only = st.checkbox(t('cov_only'), value=True, key='cov_only')
+        view = cov[cov['cob_stock'] < -0.005] if cov_only else cov
+        if view.empty:
+            st.success(t('cov_none'))
+        else:
+            v = view[['ref', 'cor', 'necessidade', 'disponivel', 'em_processo', 'a_chegar',
+                      'cob_stock', 'cob_total', 'estado']].copy()
+            v['cor'] = v['cor'].apply(lambda c: color_dot(c) + ' ' + str(c))
+            v = safe_display_df(v)
+            v.columns = [t('c_ref'), t('c_color'), t('cov_need'), t('c_avail'), t('c_inproc'),
+                         t('c_inc'), t('cov_stock'), t('cov_total'), t('c_status')]
+            render_table(v, height=360)
 
     lead = get_lead_times()
     st.markdown(f'<div class="section-subtitle">{t("pl_lead")}</div>', unsafe_allow_html=True)
@@ -6629,20 +6758,77 @@ def clear_expected_fabric_orders():
     return n
 
 def apply_garment_po_upload(rows):
-    """POs garment finais → production (PENDING, fabric_ref NULL — completar na tabela)."""
+    """POs garment finais → production (PENDING).
+    v9: UPSERT — re-upload já não apaga ref/cor/molde/metros nem o estado de POs
+    existentes (só atualiza modelo/conf/qty/data); no fim, pré-preenche a ref de
+    tecido (+ molde + metros) quando o mapa de consumos tem exatamente 1 ref para
+    a base do modelo."""
     now = datetime.now().isoformat()
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     for r in rows:
-        cur.execute("""INSERT OR REPLACE INTO production
+        cur.execute("""INSERT INTO production
                        (po_number, model_name, confeccionador, po_qty, fabric_ref, metres_expected,
                         expected_date, status, date_created, base_model, color, date_invoiced)
-                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                       ON CONFLICT(po_number) DO UPDATE SET
+                         model_name=excluded.model_name, confeccionador=excluded.confeccionador,
+                         po_qty=excluded.po_qty, expected_date=excluded.expected_date""",
                     (r['po'], r['model'], r['conf'], r['qty'], None, None,
                      r['expected'], 'PENDING', r['created'] or now, None, None, None))
     conn.commit()
     conn.close()
-    return len(rows)
+    n_auto = auto_fill_po_refs()
+    return len(rows), n_auto
+
+def _norm_base(s):
+    """v9: normaliza a base do modelo para matching — remove prefixo de estação/coleção
+    ('Women's Winter '26 - ', 'Autumn '26 - ', 'NOOS - ') e o género inicial."""
+    s = re.sub(r"^((women|men)('s)?\s+)?(winter|summer|autumn|spring|fw|ss)\s*'?\d{0,4}(\.\d{1,2})?\s*-\s*",
+               '', str(s or ''), flags=re.I)
+    s = re.sub(r'^noos\s*-\s*', '', s, flags=re.I)
+    s = re.sub(r'^(women|men)\s+', '', s, flags=re.I)
+    return re.sub(r'\s+', ' ', s).strip().lower()
+
+def auto_fill_po_refs():
+    """v9: pré-preenche fabric_ref (+ molde + metros esperados) nas POs abertas sem ref,
+    quando a base do modelo resolve para exatamente UMA ref no mapa de consumos —
+    o utilizador só confirma na tabela de Produção (a cor continua escolha manual).
+    Matching normalizado (sem prefixo de estação): exato ou prefixo (variantes Plain),
+    sempre conservador — mais de 1 ref candidata = não preenche."""
+    pos = query_to_df("""SELECT po_number, model_name, po_qty FROM production
+                         WHERE status IN ('PENDING','CUTTING') AND (fabric_ref IS NULL OR fabric_ref = '')""")
+    if pos.empty:
+        return 0
+    map_rows = query_to_df("SELECT DISTINCT base_model, fabric_ref FROM consumption_map_v4")
+    if map_rows.empty:
+        return 0
+    map_rows['nb'] = map_rows['base_model'].apply(_norm_base)
+    n = 0
+    for _, r in pos.iterrows():
+        base, _fit = derive_model_fit(r['model_name'])
+        nb = _norm_base(base)
+        if not nb:
+            continue
+        cand = map_rows[map_rows['nb'] == nb]
+        if cand.empty:
+            cand = map_rows[map_rows['nb'].str.startswith(nb)]
+        refs = cand['fabric_ref'].unique()
+        if len(refs) != 1:
+            continue
+        ref = refs[0]
+        e = resolve_map_entry(r['model_name'], ref, None)
+        bm = (f"{e['base_model']}|{e['fit']}" if e['fit'] else e['base_model']) if e else None
+        mpc = (e['m_per_pc_actual'] or e['m_per_pc_expected']) if e else None
+        mexp = round(float(r['po_qty']) * float(mpc), 1) if mpc and r['po_qty'] else None
+        execute_sql("""UPDATE production SET fabric_ref = ?, base_model = COALESCE(?, base_model),
+                       metres_expected = COALESCE(?, metres_expected) WHERE po_number = ?""",
+                    (ref, bm, mexp, r['po_number']))
+        n += 1
+    if n:
+        log_movement('EDIT', None, None, None, None, None, None,
+                     f'v9 auto: ref de tecido pré-preenchida em {n} POs')
+    return n
 
 def apply_history_upload(rows):
     """Histórico de consumos: insere consumos validados, cria POs antigas (INVOICED) para
@@ -6834,10 +7020,10 @@ def render_reset_reload():
                     if _already('garm', f):
                         st.caption(t('rs_loaded'))
                     elif st.button(f"{t('rs_load')} ({len(rows)})", key='rs_b_garm'):
-                        n = apply_garment_po_upload(rows)
+                        n, n_auto = apply_garment_po_upload(rows)
                         _mark_done('garm', f)
                         st.session_state.pop('rs_f_garm', None)  # v8.3: larga o ficheiro retido
-                        flash('success', t('ok_up_garm', n=n))
+                        flash('success', t('ok_up_garm', n=n, a=n_auto))
                         st.rerun()
             except Exception as e:
                 st.error(t('rs_file_err', e=e))
@@ -6935,13 +7121,14 @@ def main():
                      format_func=lambda x: '🌙 Dark' if x == 'dark' else '☀️ Clean',
                      key='theme', label_visibility='collapsed')
 
-    # v7: automações de arranque — cor da PO e molde auto-aplicados (1× por sessão)
+    # v7/v9: automações de arranque — ref pré-preenchida, cor da PO e molde (1× por sessão)
     if not st.session_state.get('_v7_auto'):
         st.session_state['_v7_auto'] = True
         try:
+            _na = auto_fill_po_refs()
             _nc, _nm = auto_fix_po_colors(), auto_link_models()
-            if _nc or _nm:
-                flash('info', t('ok_auto_v7', c=_nc, m=_nm))
+            if _na or _nc or _nm:
+                flash('info', t('ok_auto_v9', a=_na, c=_nc, m=_nm))
         except Exception:
             pass
 
