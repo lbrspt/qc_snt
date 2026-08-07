@@ -1,5 +1,15 @@
 """
-SNT APS Portugal - Stock & Produção v9.0
+SNT APS Portugal - Stock & Produção v9.1
+v9.1 (FIX — código HTML solto no registo de consumos):
+- Causa: células importadas do Excel com caracteres de controlo/invisíveis (quebras de
+  linha, tabs, ZWSP U+200B...). Uma célula com linha em branco terminava o bloco HTML
+  do markdown a meio da tabela — o restante HTML aparecia como texto solto com 
+  por cima da tabela (ex.: linha "<td class=num>92685Women's Essential...")
+- _sanitize_txt(): remove esses caracteres em render_table (todas as tabelas HTML) e
+  nos cartões de andamento — defesa total no lado da apresentação
+- Migração idempotente no arranque limpa a BD existente (consumptions, production,
+  incoming_fabric, fabric_refs, fabric_rolls, consumption_map_v4)
+- Parsers (histórico, POs tecido/garment, audit, master data) já limpam à entrada
 v9.0 (USABILIDADE & ANTECIPAÇÃO — menos edição manual, faltas previstas por cor):
 - POs garment: re-upload já não apaga ref/cor/molde/metros nem o estado (UPSERT);
   ref de tecido pré-preenchida automaticamente (+ molde + metros) quando o mapa de
@@ -2590,6 +2600,22 @@ def init_db():
     if 'curated' not in [r[1] for r in cursor.fetchall()]:
         cursor.execute("ALTER TABLE fabric_refs ADD COLUMN curated INTEGER DEFAULT 0")
 
+    # Migração v9.1: limpar caracteres invisíveis/de controlo herdados de imports Excel
+    # (ZWSP U+200B, \n, \r, \t, NUL...) — dentro de uma célula partiam o bloco HTML das
+    # tabelas (registo de consumos aparecia com tags soltas e  no ecrã). Idempotente.
+    _txt_fix = ("TRIM(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE({c}, "
+                "char(8203), ''), char(8204), ''), char(65039), ''), char(13) || char(10), ' '), "
+                "char(10), ' '), char(13), ' '), char(9), ' '), char(11), ' '), char(12), ' '), '  ', ' '), '  ', ' '))")
+    for _tb, _cols in (
+            ('consumptions', ('po_garment', 'model_name', 'confeccionador', 'notes', 'authorized_note')),
+            ('production', ('po_number', 'model_name', 'confeccionador', 'fabric_ref', 'base_model', 'color')),
+            ('incoming_fabric', ('po_number', 'supplier', 'ref_code', 'color', 'tracking_ref')),
+            ('fabric_refs', ('ref_code', 'description', 'supplier')),
+            ('fabric_rolls', ('token', 'ref_code', 'color', 'lot', 'notes', 'po_garment')),
+            ('consumption_map_v4', ('base_model', 'fit', 'fabric_ref'))):
+        for _c in _cols:
+            cursor.execute(f"UPDATE {_tb} SET {_c} = {_txt_fix.format(c=_c)} WHERE {_c} IS NOT NULL")
+
     # Consistência v3.8: PO com cortes registados está em CUTTING
     cursor.execute("""UPDATE production SET status = 'CUTTING' WHERE status = 'PENDING'
                       AND po_number IN (SELECT DISTINCT po_garment FROM consumptions)""")
@@ -4018,6 +4044,18 @@ def packing_section():
         flash('success', msg)
         st.rerun()
 
+_TXT_BAD_RE = re.compile(
+    '[\\x00-\\x1f\\x7f-\\x9f\\u200b-\\u200d\\u2028-\\u2029\\u2060\\ufeff\\ufffd\\ud800-\\udfff]+')
+
+def _sanitize_txt(v):
+    """v9.1: remove caracteres de controlo/invisíveis importados do Excel (ZWSP, quebras
+    de linha, tabs, NUL, etc.). Uma célula com linha em branco partia o bloco HTML do
+    markdown a meio da tabela — o resto aparecia como texto solto com no ecrã."""
+    if not isinstance(v, str):
+        return v
+    return _TXT_BAD_RE.sub(' ', v).strip()
+
+
 def safe_display_df(df):
     """Limpa DataFrame para evitar PyArrow segfault"""
     df = df.copy()
@@ -4043,11 +4081,11 @@ def render_table(df, height=None):
             try:
                 return f"{float(v):,.2f}".rstrip('0').rstrip('.')
             except (ValueError, TypeError):
-                return str(v)
-        return str(v)
+                return _sanitize_txt(str(v))
+        return _sanitize_txt(str(v))
 
     thead = ''.join(
-        f'<th class="{"num" if c in numeric_cols else ""}">{html.escape(str(c))}</th>'
+        f'<th class="{"num" if c in numeric_cols else ""}">{html.escape(_sanitize_txt(str(c)))}</th>'
         for c in df.columns)
     rows = []
     for _, r in df.iterrows():
@@ -5335,7 +5373,7 @@ def _render_andamento():
                 cards.append((-(dev if dev is not None else -999), f"""
                 <div class="po-card">
                     <div class="po-head"><span class="po-num">{r['po_number']}</span><span class="dev-chip {chip_cls}">{chip_txt}</span></div>
-                    <div class="po-model">{r['model_name']} · {r['confeccionador']}</div>
+                    <div class="po-model">{_sanitize_txt(str(r['model_name']))} · {_sanitize_txt(str(r['confeccionador']))}</div>
                     <div class="po-ref">{ref_lbl}</div>
                     <div class="po-prog"><div class="po-prog-fill" style="width:{prog:.0f}%"></div></div>
                     <div class="po-prog-lbl"><span>{pcs_cut:,.0f} / {po_qty:,.0f} pcs</span><span>{prog:.0f}%</span></div>
@@ -6361,7 +6399,7 @@ _AUDIT_ENTITY = {
 
 def _map_conf_name(raw):
     """Nome NetSuite do confeccionador → nome canónico da app (CONFECCIONADORES)."""
-    s = str(raw or '').strip()
+    s = _sanitize_txt(str(raw or ''))
     sl = s.lower()
     for k, v in (('samidel', 'Samidel'), ('costa correia', 'Costa Correia'),
                  ('tyrrel', 'Tyrrell'), ('acorfato', 'Acorfato'), ('fabrijeans', 'Fabrijeans'),
@@ -6381,7 +6419,7 @@ def _match_ref_prefix(item):
 
 def _split_ref_color(text):
     """'REF - Cor' → (ref, cor). Sem separador: ref = prefixo do catálogo, cor = resto."""
-    s = re.sub(r'\s+', ' ', str(text or '')).strip()
+    s = re.sub(r'\s+', ' ', _sanitize_txt(str(text or '')))
     if not s:
         return '', ''
     if ' - ' in s:
@@ -6425,7 +6463,7 @@ def parse_audit_stock(data):
         ref, color = _split_ref_color(rc)
         if not ref or ref.lower() == 'total':
             continue
-        art = str(r.get(art_col) or '').strip() if art_col else ''  # v8.5: descrição por ref
+        art = _sanitize_txt(str(r.get(art_col) or '')) if art_col else ''  # v8.5: descrição por ref
         if art.lower() in ('nan', 'none'):
             art = ''
         cells = []
@@ -6486,10 +6524,10 @@ def parse_fabric_pos(data):
         cre = pd.to_datetime(g['Creation Date'].iloc[0], errors='coerce')
         rows.append({
             'po': str(po), 'ref': ref, 'color': color,
-            'supplier': str(g['Name'].iloc[0]).strip(), 'metres': round(qty, 1),
+            'supplier': _sanitize_txt(str(g['Name'].iloc[0])), 'metres': round(qty, 1),
             'expected': due.strftime('%Y-%m-%d') if pd.notna(due) else None,
             'created': cre.strftime('%Y-%m-%d') if pd.notna(cre) else None,
-            'memo': str(g['Memo (Main)'].iloc[0] or '').strip(),
+            'memo': _sanitize_txt(str(g['Memo (Main)'].iloc[0] or '')),
         })
     counts = {}
     for r in rows:
@@ -6514,7 +6552,7 @@ def parse_garment_pos(data):
         due = pd.to_datetime(r['Due Date/Receive By'], errors='coerce')
         cre = pd.to_datetime(r['Date'], errors='coerce')
         rows.append({
-            'po': po, 'model': str(r['Memo (Main)'] or '').strip(),
+            'po': po, 'model': _sanitize_txt(str(r['Memo (Main)'] or '')),
             'conf': _map_conf_name(r['Company Name']),
             'qty': int(pd.to_numeric(r['Qty Order'], errors='coerce') or 0),
             'expected': due.strftime('%Y-%m-%d') if pd.notna(due) else None,
@@ -6544,7 +6582,7 @@ def parse_history(data):
         if not all([c_po, c_used]):
             continue
         for _, r in df.iterrows():
-            po = str(r.get(c_po) or '').strip()
+            po = _sanitize_txt(str(r.get(c_po) or ''))
             if not po.startswith('POAPS'):
                 continue
             used = pd.to_numeric(r.get(c_used), errors='coerce')
@@ -6556,7 +6594,7 @@ def parse_history(data):
             cut = int(cut) if cut is not None and pd.notna(cut) else None
             qp = pd.to_numeric(r.get(c_qp), errors='coerce') if c_qp else None
             qp = int(qp) if qp is not None and pd.notna(qp) else (cut or 0)
-            memo = str(r.get(c_memo) or '').strip()
+            memo = _sanitize_txt(str(r.get(c_memo) or ''))
             key = (po, memo, float(used), cut)
             if key in seen:
                 dupes += 1
@@ -6719,8 +6757,8 @@ def parse_master_data(data, name):
         ref, _color = _split_ref_color(str(raw).strip())
         if not ref or ref.lower() == 'total':
             continue
-        desc = str(r.get(dc) or '').strip() if dc else ''
-        sup = str(r.get(sc) or '').strip() if sc else ''
+        desc = _sanitize_txt(str(r.get(dc) or '')) if dc else ''
+        sup = _sanitize_txt(str(r.get(sc) or '')) if sc else ''
         rows[ref] = {'ref': ref,
                      'desc': None if desc.lower() in ('', 'nan', 'none') else desc,
                      'supplier': None if sup.lower() in ('', 'nan', 'none') else sup}

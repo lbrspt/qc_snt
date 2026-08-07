@@ -1,3 +1,13 @@
+## v9.1 — Fix: código HTML solto no registo de consumos
+
+| Problema | Correção |
+|---|---|
+| **Na vista Consumos » Andamento & Registos aparecia código solto** (`<td class=num>92685Women's Essential Pants Straight Navy Pinstriped1,205290...`) por cima da tabela | **Causa raiz:** células importadas do Excel traziam **caracteres de controlo/invisíveis** (quebras de linha dentro da célula, tabs, zero-width space U+200B...). Uma célula com **linha em branco** terminava o bloco HTML do markdown a meio da tabela — o browser "resgatava" o resto como texto solto **por cima da tabela**, com  onde os tags se partiram. Corrigido em 3 camadas: **(1)** todas as tabelas HTML e os cartões de andamento passam por `_sanitize_txt()` ao renderizar (defesa total, independentemente do que esteja na BD); **(2)** **migração idempotente no arranque** limpa os textos já gravados na BD (consumos, produção, tecido a chegar, catálogo, rolos, mapa de consumos); **(3)** todos os parsers (histórico, POs tecido/garment, audit, master data) já limpam à entrada — o All PO.xlsx trazia **719 zero-width spaces** escondidos nos nomes de modelos |
+
+**Como aplicar:** copiar `app.py` → commit → Railway. **Sem re-seed, sem reset** — a migração corre sozinha no arranque e limpa os textos existentes; o ecrã fica correto imediatamente (mesmo antes da limpeza, a camada de renderização já protege).
+
+---
+
 ## v9.0 — Usabilidade & antecipação: POs auto-preenchidas, cobertura por cor, vista personalizável
 
 | Pedido | Implementação |
